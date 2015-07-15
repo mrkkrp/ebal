@@ -1,5 +1,8 @@
 # Ebal
 
+[![License GPL 3](https://img.shields.io/badge/license-GPL_3-green.svg)](http://www.gnu.org/licenses/gpl-3.0.txt)
+[![Build Status](https://travis-ci.org/mrkkrp/ebal.svg?branch=master)](https://travis-ci.org/mrkkrp/ebal)
+
 *Work in progress…*
 
 This is Emacs interface to Cabal that eliminates boilerplate.
