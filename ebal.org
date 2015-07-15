@@ -1,0 +1,115 @@
+* TODO Design
+** General execution
+   Every command is one invocation of ‘cabal’ executable. Command line is
+   built in the following way:
+
+   ‘ebal-cabal-executable’ or "cabal" +
+   name of command as per ‘ebal-define-action’ +
+   global options for actual command +
+   local options for command/project +
+   some command may take argument, put it here
+
+   This is put into ‘compile’ with let-bound ‘default-directory’.
+** Use DSL to code cabal commands and their interactions
+   The main tool to build our system should be ‘ebal-define-acton’ macro,
+   the following things we can specify with it:
+*** name (symbol)
+    Actual function is defined with name ‘ebal-action-<name>’. This name is
+    also used to identify the command.
+*** cabal command (string)
+*** arguments (?? how to specify how to get them interactively?)
+*** list of command that should be checked/called before
+    In order.
+*** optionally predicate
+    To determine if it makes sense to call this command as dependency of
+    other command.
+*** doc string
+*** body to execute
+** Use long versions of options for readability
+** Parse existing cabal file
+   To assist some commands we need to parse actual cabal file. Support of
+   full specification is probably not needed, we could extract only useful
+   bits.
+* TODO Supported Commands
+  Here is the actual list and one-letter shortcuts:
+** TODO [b] build (standard)
+** TODO [B] build (specific target)
+** TODO [c] configure
+** TODO [i] install
+   cabal install --only-dependencies --enable-tests --enable-benchmarks
+   check out what do they say about profiling, maybe we should add it too
+** TODO [r] run
+** TODO [n] sandbox init
+** TODO [d] sandbox delete
+** TODO [d] sdist
+** TODO [t] test
+** Finish this list and make research to determine list of commands.
+* TODO Settings & Variables
+** TODO ‘ebal-cabal-executable’
+   Location of cabal executable. This is used in invocation of cabal
+   commands if it's not NIL (default value). If this is NIL, use the word
+   "cabal" assuming that the OS can locate cabal file.
+** TODO ‘ebal-sandboxing’
+*** nil
+    Don't do anything unless sandbox is explicitly created by user.
+*** always
+    Silently create sandbox after generation of .cabal file and
+    check/silently create it before every installation.
+*** ask (default)
+    Ask to create sandbox after generation of .cabal file and before every
+    installation (when actually something should be installed).
+** TODO ‘ebal-command-dependency-policy’
+*** nil
+    Do not perform any commands that are not explicitly called.
+*** silently
+    Silently perform dependencies of commands.
+*** ask (default)
+    Ask to perform dependencies of commands.
+** TODO ‘ebal-select-action’
+   Function to call to select Ebal action. This should default to
+   something. We can use it during development to postpone writing of nice
+   popup generating function.
+** TODO ‘ebal--action-alist’
+   Alist that maps names of actions (symbols) to their descriptions (used in
+   popup) and functions to call.
+** TODO ‘ebal-completing-read’
+   Use simple completing read but allow IDO (most users want it).
+** TODO ‘ebal-global-options’
+   Alist mapping command names into string (or NILs) to use in command
+   invocation. This is «always used» options.
+** TODO ‘ebal-project-options’
+   Mapping of options for every command that is different for different
+   projects. Should be stored in separate file in root directory. Loaded
+   and set before constructing of command line. Config file should be called
+   “my-project.ebal”.
+** TODO ‘ebal-bury-on-success’
+    Bury *compilation* buffer after successful compilation restoring windows
+    state before invokation of ‘compile’. This should be disabled by
+    default (nil).
+** TODO ‘ebal-version’
+   Version of the package.
+** TODO ‘ebal-active-action’
+   NIL if no action is begin performed right now. Set it before running
+   actions hooks and reset after running «after» action hooks.
+* TODO Command to generate .cabal file
+  Default wizard sucks. This needs to be done entirely in Emacs Lisp. I
+  think we should name the command ‘ebal-init’. If ‘ebal-sandboxing’ is
+  non-NIL, propose to create sandbox after generation.
+* TODO Popup interface to select action
+  This is invoked by ‘ebal-execute’. It should mention name of project, its
+  version, list of actions each labelled with a letter. Make it pretty,
+  similar to Magit popups, but more colorized.
+* TODO Hooks
+  The following hooks should be supported (all normal hooks):
+** TODO ‘ebal-before-init-hook’
+** TODO ‘ebal-after-init-hook’
+** TODO ‘ebal-before-action-hook’
+** TODO ‘ebal-after-action-hook’
+* TODO Don't forget to check
+** TODO Availability of Cabal executable
+   User should be able to set path to cabal if the system cannot find it
+   automatically. This should be checked before any work is attempted, use
+   macro (?).
+** TODO Existence of .cabal file
+   If it doesn't exist, show a message and ask to create it via
+   ‘ebal-init’. This should be tested at the beginning of ‘ebal-execute’.
