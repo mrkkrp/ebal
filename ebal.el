@@ -5,7 +5,7 @@
 ;; Author: Mark Karpov <markkarpov@openmailbox.org>
 ;; URL: https://github.com/mrkkrp/ebal
 ;; Version: 0.1.0
-;; Package-Requires: ((emacs "24.4") (cl-lib "0.5") (f "1.6"))
+;; Package-Requires: ((emacs "24.4") (cl-lib "0.5") (f "1.6") (mmt "0.1.0"))
 ;; Keywords: convenience, cabal, haskell
 ;;
 ;; This file is not part of GNU Emacs.
@@ -31,6 +31,7 @@
 
 (require 'cl-lib)
 (require 'f)
+(require 'mmt)
 
 ;; TODO: this is just a batch of hacks, write great package now
 
