@@ -9,7 +9,9 @@
    local options for command/project +
    some command may take argument, put it here
 
-   This is put into ‘compile’ with let-bound ‘default-directory’.
+   This is put into ‘compile’ with let-bound ‘default-directory’. Name the
+   buffer the same as project is named but with asterisks. This can be
+   easily done with help of ‘compilation-buffer-name-function’.
 ** Use DSL to code cabal commands and their interactions
    The main tool to build our system should be ‘ebal-define-acton’ macro,
    the following things we can specify with it:
@@ -17,12 +19,17 @@
     Actual function is defined with name ‘ebal-action-<name>’. This name is
     also used to identify the command.
 *** cabal command (string)
-*** arguments (?? how to specify how to get them interactively?)
+*** function to generate list of argument values
+    To feed it to IDO or completing read. If such function is given, ARG is
+    available inside of BODY. Make sure that even when IDO or plain
+    ‘completing-read’ is used, it allows not expected input (it's often
+    needed).
 *** list of command that should be checked/called before
-    In order.
+    This should be of the following form:
+    (action &rest argument-list)
 *** optionally predicate
-    To determine if it makes sense to call this command as dependency of
-    other command.
+    To determine if it can be called as dependency of other command. This
+    can ask user in some cases (for some commands).
 *** doc string
 *** body to execute
 ** Use long versions of options for readability
@@ -32,18 +39,25 @@
    bits.
 * TODO Supported Commands
   Here is the actual list and one-letter shortcuts:
-** TODO [b] build (standard)
-** TODO [B] build (specific target)
+** TODO [b] build
 ** TODO [c] configure
+** TODO [d] sdist
+** TODO [e] bench
+** TODO [f] freeze
+** TODO [g] fetch
+** TODO [h] haddock
 ** TODO [i] install
    cabal install --only-dependencies --enable-tests --enable-benchmarks
    check out what do they say about profiling, maybe we should add it too
-** TODO [r] run
+** TODO [k] check
+** TODO [l] list
 ** TODO [n] sandbox init
-** TODO [d] sandbox delete
-** TODO [d] sdist
+** TODO [o] info
+** TODO [r] run
 ** TODO [t] test
-** Finish this list and make research to determine list of commands.
+** TODO [u] update
+** TODO [x] sandbox delete
+** TODO [z] clean
 * TODO Settings & Variables
 ** TODO ‘ebal-cabal-executable’
    Location of cabal executable. This is used in invocation of cabal
@@ -61,18 +75,16 @@
 ** TODO ‘ebal-command-dependency-policy’
 *** nil
     Do not perform any commands that are not explicitly called.
-*** silently
+*** non-nil (default)
     Silently perform dependencies of commands.
-*** ask (default)
-    Ask to perform dependencies of commands.
-** TODO ‘ebal-select-action’
+** TODO ‘ebal-select-action-function’
    Function to call to select Ebal action. This should default to
    something. We can use it during development to postpone writing of nice
-   popup generating function.
+   popup generating function. Final product should also contain alternatives
+   to popup interface since it costs nothing for us.
 ** TODO ‘ebal--action-alist’
-   Alist that maps names of actions (symbols) to their descriptions (used in
-   popup) and functions to call.
-** TODO ‘ebal-completing-read’
+   Alist that maps names of actions (symbols) to functions to call.
+** TODO ‘ebal-completing-read-function’
    Use simple completing read but allow IDO (most users want it).
 ** TODO ‘ebal-global-options’
    Alist mapping command names into string (or NILs) to use in command
@@ -98,7 +110,8 @@
 * TODO Popup interface to select action
   This is invoked by ‘ebal-execute’. It should mention name of project, its
   version, list of actions each labelled with a letter. Make it pretty,
-  similar to Magit popups, but more colorized.
+  similar to Magit popups, but more colorized. Which keys are used for every
+  command should be local stuff in there.
 * TODO Hooks
   The following hooks should be supported (all normal hooks):
 ** TODO ‘ebal-before-init-hook’
