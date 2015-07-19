@@ -78,6 +78,8 @@
     To determine if it can be called as dependency of other command. This
     can ask user in some cases (for some commands).
 *** flag to determine if it can be buried on success
+*** documentation
+*** body
 ** Use long versions of options for readability
 ** Parse existing cabal file
    To assist some commands we need to parse actual cabal file. Support of
@@ -113,17 +115,17 @@
   version, list of commands each labelled with a letter. Make it pretty,
   similar to Magit popups, but more colorized. Which keys are used for every
   command should be local stuff in there.
-* TODO Hooks
+* DONE Hooks
   The following hooks should be supported (all normal hooks):
-** TODO ‘ebal-before-init-hook’
-** TODO ‘ebal-after-init-hook’
-** TODO ‘ebal-before-command-hook’
-** TODO ‘ebal-after-command-hook’
+** DONE ‘ebal-before-init-hook’
+** DONE ‘ebal-after-init-hook’
+** DONE ‘ebal-before-command-hook’
+** DONE ‘ebal-after-command-hook’
 * TODO Don't forget to check
 ** TODO Availability of Cabal executable
    User should be able to set path to cabal if the system cannot find it
    automatically. This should be checked before any work is attempted, use
    macro (?).
-** TODO Existence of .cabal file
+** DONE Existence of .cabal file
    If it doesn't exist, show a message and ask to create it via
    ‘ebal-init’. This should be tested at the beginning of ‘ebal-execute’.

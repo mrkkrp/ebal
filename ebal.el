@@ -42,27 +42,53 @@
   :prefix "ebal-")
 
 (defvar ebal--command-alist nil
-  "Alist that maps names of commands to Cabal commands.
+  "Alist that maps names of commands to functions that perform them.
 
 This variable is modified by `ebal-define-command' when some
-command is defined.")
+command is defined.  Do not modify this manually, unless you know
+what you're doing.")
 
-(defvar ebal--active-command nil
+(defvar ebal--actual-command nil
   "Name of currently performed command (symbol) or NIL.
 
 NIL value means that no command is performed right now.  This is
-set by Ebal before running of “before” command hooks and reset
-after running “after” command hook.
+set by `ebal--perform-command' before running of “before” command
+hooks and reset after running “after” command hook.
 
 This variable is mainly useful when you want to add
 ‘ebal-before-command-hook’ or ‘ebal-after-command-hook’ and you
 need to test which command is currently performed.")
 
 (defvar ebal--last-directory nil
-  "Path to project's directory last time `ebal-execute' was called.
+  "Path to project's directory last time `ebal--prepare' was called.
 
 This is mainly used to check when we need to reload/re-parse
 project-local settings that user might have.")
+
+(defvar ebal--cabal-mod-time nil
+  "Time of last modification of \"*.cabal\" file.
+
+This is usually set by `ebal-prepare'.")
+
+(defvar ebal--ebal-mod-time nil
+  "Time of last modification of \"*.ebal\" file.
+
+This is usually set by `ebal-prepare'.")
+
+(defvar ebal--project-name nil
+  "Name of current project extracted from \"*.cabal\" file.
+
+This is usually set by `ebal--parse-cabal-file'.")
+
+(defvar ebal--project-version nil
+  "Version of current project extracted from \"*.cabal\" file.
+
+This is usually set by `ebal--parse-cabal-file'.")
+
+(defvar ebal--project-targets nil
+  "List of build targets (strings) extracted from \"*.cabal\" file.
+
+This is usually set by `ebal--parse-cabal-file'.")
 
 (defcustom ebal-cabal-executable nil
   "Path to cabal executable.
@@ -77,7 +103,8 @@ being used to compose command line."
   :type '(choice (file :must-match t)
                  (const :tag "Use Default" nil)))
 
-(defcustom ebal-global-options nil
+;;;###autoload
+(defcustom ebal-global-option-alist nil
   "Alist that maps names of commands to their default options.
 
 Names of commands are symbols and options are strings.  If option
@@ -86,13 +113,13 @@ empty string.
 
 Note that this is global collection of options.  If you want to
 specify option to be used only with a specific command and in a
-specific project, see `ebal-project-options' and corresponding
-setup instructions."
+specific project, see `ebal-project-option-alist' and
+corresponding setup instructions."
   :tag "Global Options for Ebal Commands"
   :type '(alist :key-type symbol
                 :value-type (string :tag "Command Line Options")))
 
-(defcustom ebal-project-options nil
+(defcustom ebal-project-option-alist nil
   "Alist that maps names of commands to their default options.
 
 Names of commands are symbols and options are strings.  If option
@@ -146,7 +173,10 @@ All other values of this variabe produce the same effect as
   "Wheter to bury compilation bury on success.
 
 If this variable is bound to non-NIL value, restore window
-configuration after successful execution of Ebal command."
+configuration after successful execution of Ebal command.
+
+This option has no effect for commands that print some
+information, these are never buried."
   :tag "Bury *Compilation* buffer on success"
   :type 'boolean)
 
@@ -167,22 +197,162 @@ buffer, but you can use IDO-powered variant if you like or plain
                 (function-item ebal-command-ido)
                 (function-item ebal-command-completing-read)))
 
-;; TODO: variables for all values that should be extracted:
-;; * `ebal-project-name'
-;; * `ebal-project-version'
-;; * `ebal-project-targets'
+(defcustom ebal-before-init-hook nil
+  "Hook to run before execution of `ebal-init' function."
+  :tag "Before Init Hook"
+  :type 'hook)
 
-;; TODO: variables for hooks
+(defcustom ebal-after-init-hook nil
+  "Hook to run after execution of `ebal-init' function."
+  :tag "After Init Hook"
+  :type 'hook)
 
-;; TODO: implement algorithm for locating and extracting all the data
-;; without unnecessary reparsing (`ebal-prepare')
+(defcustom ebal-before-command-hook nil
+  "Hook to run before execution of particular command.
 
-;; TODO: low-level construction of individual commands and their execution
-;; via `compile' (variable to store functions to ask arguments)
+You can check name of the command in `ebal--actual-command'."
+  :tag "Before Command Hook"
+  :type 'hook)
+
+(defcustom ebal-after-command-hook nil
+  "Hook to run after execution of particular command."
+  :tag "After Command Hook"
+  :type 'hook)
+
+;; Preparation, parsing of Cabal and Ebal files.
+
+(defun ebal--parse-cabal-file (_filename)
+  "Parse \"*.cabal\" file with name FILENAME and set some variables.
+
+The following variables are set:
+
+* `ebal--project-name'
+* `ebal--project-version'
+* `ebal--project-targets'
+
+This is used by `ebal--prepare'."
+  ;; FIXME — I don't do anything useful yet
+  (setq ebal--project-name    "Project Name"
+        ebal--project-version "0.0.0"
+        ebal--project-targets '("one" "two" "three")))
+
+(defun ebal--parse-ebal-file (filename)
+  "Parse \"*.ebal\" file with name FILENAME and set some variables.
+
+The following variable is set:
+
+* `ebal--project-option-alist'
+
+This is used by `ebal--prepare.'"
+  (setq ebal-project-option-alist
+        (with-temp-buffer
+          (insert-file-contents filename)
+          (read (buffer-string)))))
+
+(defun ebal--find-dir-of-file (regexp)
+  "Find file whose name satisfies REGEXP traversing upwards.
+
+Return absolute path to directory containing that file or NIL on
+failure.  Returned path is guaranteed to have trailing slash."
+  (let ((dir (f-traverse-upwards
+              (lambda (path)
+                (directory-files path t regexp t))
+              (f-full default-directory))))
+    (when dir
+      (f-slash dir))))
+
+(defun ebal--mod-time (filename)
+  "Return time of last modification of file FILENAME."
+  (nth 5 (file-attributes filename 'integer)))
+
+(defun ebal--prepare ()
+  "Locate, read, and parse configuration files and set various variables.
+
+This commands searches for first \"*.cabal\" files traversing
+directories upwards beginning with `default-directory'.  When
+Cabal files is found, the following variables are set:
+
+* `ebal--project-name'
+* `ebal--project-version'
+* `ebal--project-targets'
+
+If \"*.ebal\" file is present, `ebal--project-option-alist' is
+set.
+
+At the end, `ebal--last-directory' is set.  Note that this
+function is smart enough to not reparse all the stuff every time.
+It can detect when we are in different project or when some files
+have been changed since its last invocation.
+
+Returned value is T on success and NIL on failure (when no
+\"*.cabal\" files is found)."
+  (let* ((project-directory
+          (ebal--find-dir-of-file "^.+\.cabal$"))
+         (cabal-file
+          (car (and project-directory
+                    (f-glob "*.cabal" project-directory))))
+         (ebal-file
+          (let ((ebal-pretender (f-swap-ext cabal-file "ebal")))
+            (when (f-file? ebal-pretender)
+              ebal-pretender))))
+    (when cabal-file
+      (if (or (not ebal--last-directory)
+              (not (f-same? ebal--last-directory
+                            project-directory)))
+          (progn
+            ;; We are in different directory (or it's the first invocation).
+            ;; This means we should unconditionally parse everything without
+            ;; checking of date of last modification.
+            (ebal--parse-cabal-file cabal-file)
+            (setq ebal--cabal-mod-time (ebal--mod-time cabal-file))
+            (when ebal-file
+              (ebal--parse-ebal-file ebal-file)
+              (setq ebal--ebal-mod-time (ebal--mod-time ebal-file)))
+            ;; Set last directory for future checks.
+            (setq ebal--last-directory project-directory)
+            t) ;; Return T on success.
+        ;; We are in already visited directory, so we don't need to reset
+        ;; `ebal--last-directory' this time. We need to reread/re-parse
+        ;; *.cabal and *.ebal files if they have been modified though.
+        (when (time-less-p ebal--cabal-mod-time
+                           (ebal--mod-time cabal-file))
+          (ebal--parse-cabal-file cabal-file)
+          (setq ebal--cabal-mod-time (ebal--mod-time cabal-file)))
+        (when (time-less-p ebal--ebal-mod-time
+                           (ebal--mod-time ebal-file))
+          (ebal--parse-ebal-file ebal-file)
+          (setq ebal--ebal-mod-time (ebal--mod-time ebal-file)))
+        t))))
+
+;; Low-level construction of individual commands and their execution via
+;; `compile'.
+
+(defun ebal--perform-command (command &optional arg dont-bury)
+  "Perform Cabal command COMMAND.
+
+This function should be called in “prepared” environment, where
+`ebal--actual-command' is bound to name of executing command.
+
+If argument ARG is given, it will quoted and added to command
+line.
+
+If DONT-BURY is given and it's not NIL, never bury compilation
+buffer even if burying of compilation buffers on success is
+enabled (see `ebal-bury-on-success').
+
+This is low-level operation, it doesn't run `ebal--prepare', thus
+it cannot be used on its own by user."
+  (let ((ebal--actual-command command))
+    (run-hooks ebal-before-command-hook)
+    ;; FIXME here we should do it nicely
+    (run-hook ebal-after-command-hook)))
 
 ;; TODO: write `ebal-define-command'
 
-;; TODO: `ebal-execute'
+(defun ebal-execute ()
+  "Choose Cabal command and perform it."
+  ;; TODO write me, please
+  nil)
 
 ;; TODO: write all the supported commands
 
