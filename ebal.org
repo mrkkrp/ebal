@@ -45,7 +45,7 @@
    popup generating function. Final product should also contain alternatives
    to popup interface since it costs nothing for us.
 * TODO Design
-** General execution
+** DONE General execution
    Every command is one invocation of ‘cabal’ executable. Command line is
    built in the following way:
 
@@ -58,30 +58,30 @@
    This is put into ‘compile’ with let-bound ‘default-directory’. Name the
    buffer the same as project is named but with asterisks. This can be
    easily done with help of ‘compilation-buffer-name-function’.
-** Use DSL to code cabal commands and their interactions
+** TODO Use DSL to code cabal commands and their interactions
    The main tool to build our system should be ‘ebal-define-command’ macro,
    the following things we can specify with it:
-*** name (symbol)
+*** DONE name (symbol)
     Actual function is defined with name ‘ebal-command-<name>’. This name is
     also used to identify the command.
-*** cabal command (string)
-*** general options (to be added to ‘ebal-global-options’)
-*** function to generate list of argument values
+*** TODO cabal command (string)
+*** DONE general options (to be added to ‘ebal-global-options’)
+*** TODO function to generate list of argument values
     To feed it to IDO or completing read. If such function is given, ARG is
     available inside of BODY. Make sure that even when IDO or plain
     ‘completing-read’ is used, it allows not expected input (it's often
     needed).
-*** list of commands that should be checked/called before
+*** TODO list of commands that should be checked/called before
     This should be of the following form:
     (command &rest argument-list)
-*** optionally predicate
+*** TODO optionally predicate
     To determine if it can be called as dependency of other command. This
     can ask user in some cases (for some commands).
-*** flag to determine if it can be buried on success
-*** documentation
-*** body
-** Use long versions of options for readability
-** Parse existing cabal file
+*** TODO flag to determine if it can be buried on success
+*** DONE documentation
+*** DONE body
+** TODO Use long versions of options for readability
+** TODO Parse existing cabal file
    To assist some commands we need to parse actual cabal file. Support of
    full specification is probably not needed, we could extract only useful
    bits.

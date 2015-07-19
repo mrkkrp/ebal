@@ -44,7 +44,7 @@
 (defvar ebal--command-alist nil
   "Alist that maps names of commands to functions that perform them.
 
-This variable is modified by `ebal-define-command' when some
+This variable is modified by `ebal--define-command' when some
 command is defined.  Do not modify this manually, unless you know
 what you're doing.")
 
@@ -191,7 +191,10 @@ information, these are never buried."
 
 This is what `ebal-execute' uses.  Default is Ebal custom popup
 buffer, but you can use IDO-powered variant if you like or plain
-`ebal-command-completing-read'."
+`ebal-command-completing-read'.
+
+The function is called with no arguments, it should return symbol
+specifying chosen command."
   :tag "How to Select Command"
   :type '(radio (function-item ebal-command-popup)
                 (function-item ebal-command-ido)
@@ -342,19 +345,88 @@ enabled (see `ebal-bury-on-success').
 
 This is low-level operation, it doesn't run `ebal--prepare', thus
 it cannot be used on its own by user."
-  (let ((ebal--actual-command command))
-    (run-hooks ebal-before-command-hook)
-    ;; FIXME here we should do it nicely
-    (run-hook ebal-after-command-hook)))
+  (run-hooks ebal-before-command-hook)
+  (let ((default-directory ebal--last-directory)
+        (compilation-buffer-name-function
+         (lambda (_major-mode)
+           (format "*%s*"
+                   (downcase
+                    (replace-regexp-in-string
+                     "[[:space:]]"
+                     "-"
+                     (concat ebal--project-name
+                             "="
+                             command))))))
+        (temp-window-config (current-window-configuration)))
+    (compile
+     (mapconcat
+      #'shell-quote-argument
+      (remove
+       nil
+       (list
+        (or ebal-cabal-executable "cabal")
+        command
+        (cdr (assq ebal--actual-command ebal-global-option-alist))
+        (cdr (assq ebal--actual-command ebal-project-option-alist))
+        arg))
+      " "))
+    (when (and nil ; FIXME: test successful-compilation
+               ebal-bury-on-success
+               (not dont-bury))
+      (set-window-configuratin temp-window-config)))
+  (run-hook ebal-after-command-hook))
 
-;; TODO: write `ebal-define-command'
+(defmacro ebal--define-command ;; TODO finish this
+    (name global-options doc-string &rest body)
+  ""
+  (declare (indent 3))
+  (let ((function-name
+         (intern (concat "ebal--command-"
+                         (symbol-name name)))))
+    `(defun ,function-name ()
+       ,doc-string
 
-(defun ebal-execute ()
-  "Choose Cabal command and perform it."
-  ;; TODO write me, please
-  nil)
+       )))
+
+(defun ebal--cabal-available ()
+  "Return non-NIL if location of Cabal executable known, and NIL otherwise."
+  (or (executable-find "cabal")
+      (and ebal-cabal-executable
+           (f-file? ebal-cabal-executable))))
+
+(defun ebal-execute (command)
+  "Perform cabal command COMMAND.
+
+When called interactively, propose to choose command with
+`ebal-select-command-function'."
+  ;; FIXME: this should be interactive
+  (if (ebal--cabal-available)
+      (if (ebal--prepare)
+          (let ((fnc (cdr (assq command ebal--command-alist))))
+            (when fnc
+              (funcall fnc)))
+        (message "Cannot locate ‘.cabal’ file."))
+    (message "Cannot local Cabal executable on this system.")))
 
 ;; TODO: write all the supported commands
+
+;; TODO `build'
+;; TODO `configure'
+;; TODO `sdist'
+;; TODO `bench'
+;; TODO `freeze'
+;; TODO `fetch'
+;; TODO `haddock'
+;; TODO `install'
+;; TODO `check'
+;; TODO `list'
+;; TODO `sandbox-init'
+;; TODO `info'
+;; TODO `run'
+;; TODO `test'
+;; TODO `update'
+;; TODO `sandbox-delete'
+;; TODO `clean'
 
 ;; TODO: UI — various versions of completing read, IDO (for arguments)
 
