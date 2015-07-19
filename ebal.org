@@ -65,6 +65,7 @@
     Actual function is defined with name ‘ebal-command-<name>’. This name is
     also used to identify the command.
 *** cabal command (string)
+*** general options (to be added to ‘ebal-global-options’)
 *** function to generate list of argument values
     To feed it to IDO or completing read. If such function is given, ARG is
     available inside of BODY. Make sure that even when IDO or plain
@@ -76,8 +77,7 @@
 *** optionally predicate
     To determine if it can be called as dependency of other command. This
     can ask user in some cases (for some commands).
-*** doc string
-*** body to execute
+*** flag to determine if it can be buried on success
 ** Use long versions of options for readability
 ** Parse existing cabal file
    To assist some commands we need to parse actual cabal file. Support of

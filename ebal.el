@@ -42,11 +42,10 @@
   :prefix "ebal-")
 
 (defvar ebal--command-alist nil
-  "Alist that maps names of commands to functions to call.
+  "Alist that maps names of commands to Cabal commands.
 
 This variable is modified by `ebal-define-command' when some
-command is defined.  Do not modify it manually unless you know
-what you're doing.")
+command is defined.")
 
 (defvar ebal--active-command nil
   "Name of currently performed command (symbol) or NIL.
@@ -168,7 +167,30 @@ buffer, but you can use IDO-powered variant if you like or plain
                 (function-item ebal-command-ido)
                 (function-item ebal-command-completing-read)))
 
-;; TODO: this is just a batch of hacks, write great package now
+;; TODO: variables for all values that should be extracted:
+;; * `ebal-project-name'
+;; * `ebal-project-version'
+;; * `ebal-project-targets'
+
+;; TODO: variables for hooks
+
+;; TODO: implement algorithm for locating and extracting all the data
+;; without unnecessary reparsing (`ebal-prepare')
+
+;; TODO: low-level construction of individual commands and their execution
+;; via `compile' (variable to store functions to ask arguments)
+
+;; TODO: write `ebal-define-command'
+
+;; TODO: `ebal-execute'
+
+;; TODO: write all the supported commands
+
+;; TODO: UI — various versions of completing read, IDO (for arguments)
+
+;; TODO: UI — various ways to select commands (including popup)
+
+;; TODO: UI — implement setup wizard in Emacs Lisp (`ebal-init')
 
 (defvar ebal-cabal-operations
   '((build          . "cabal build")
