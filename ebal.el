@@ -5,7 +5,7 @@
 ;; Author: Mark Karpov <markkarpov@openmailbox.org>
 ;; URL: https://github.com/mrkkrp/ebal
 ;; Version: 0.1.0
-;; Package-Requires: ((emacs "24.4") (cl-lib "0.5") (f "1.6") (ido-completing-read+"3.6"))
+;; Package-Requires: ((emacs "24.4") (cl-lib "0.5") (f "1.6") (ido-completing-read+ "3.6"))
 ;; Keywords: convenience, cabal, haskell
 ;;
 ;; This file is not part of GNU Emacs.
@@ -239,7 +239,7 @@ You can check name of the command in `ebal--actual-command'."
 
 ;; Various utilities.
 
-(defun ebal--parse-cabal-file (_filename)
+(defun ebal--parse-cabal-file (filename)
   "Parse \"*.cabal\" file with name FILENAME and set some variables.
 
 The following variables are set:
@@ -249,10 +249,23 @@ The following variables are set:
 * `ebal--project-targets'
 
 This is used by `ebal--prepare'."
-  ;; FIXME — I don't do anything useful yet
-  (setq ebal--project-name    "Project Name"
-        ebal--project-version "0.0.0"
-        ebal--project-targets '("one" "two" "three")))
+  (with-temp-buffer
+    (insert-file-contents filename)
+    ;; Project name
+    (goto-char (point-min))
+    (when (re-search-forward
+           "^[[:blank:]]*name:[[:blank:]]*\\(\\w+\\)" nil t)
+      (setq ebal--project-name
+            (match-string-no-properties 1)))
+    ;; Project version
+    (goto-char (point-min))
+    (when (re-search-forward
+           "^[[:blank:]]*version:[[:blank:]]*\\([[:digit:]\\.]+\\)" nil t)
+      (setq ebal--project-version
+            (match-string-no-properties 1)))
+    ;; FIXME Project Targets
+    (setq ebal--project-targets '("exe" "lib" "tests"))
+    nil))
 
 (defun ebal--parse-ebal-file (filename)
   "Parse \"*.ebal\" file with name FILENAME and set some variables.
@@ -291,8 +304,7 @@ failure.  Returned path is guaranteed to have trailing slash."
 
 (defun ebal--sandbox-exists (dir)
   "Return non-NIL value if sandbox exists in DIR."
-  ;; FIXME write me, please
-  nil)
+  (f-dir? (f-expand ".cabal-sandbox" dir)))
 
 (defun ebal--implicit-sandbox-request ()
   "Return non-NIL value if sandbox should be implicitly created."
@@ -304,8 +316,15 @@ failure.  Returned path is guaranteed to have trailing slash."
   "Call Cabal as if from directory DIR and return list of installed packages.
 
 This uses variation \"cabal list\" internally."
-  ;; FIXME write me, please
-  nil)
+  (let ((default-directory dir)
+        packages)
+    (with-temp-buffer
+      (shell-command "cabal list --installed --simple-output"
+                     (current-buffer))
+      (goto-char (point-min))
+      (while (re-search-forward "^\\(.+\\)[[:blank:]]" nil t)
+        (push (match-string-no-properties 1) packages))
+      (reverse packages))))
 
 ;; Preparation.
 
@@ -362,8 +381,9 @@ Returned value is T on success and NIL on failure (when no
                            (ebal--mod-time cabal-file))
           (ebal--parse-cabal-file cabal-file)
           (setq ebal--cabal-mod-time (ebal--mod-time cabal-file)))
-        (when (time-less-p ebal--ebal-mod-time
-                           (ebal--mod-time ebal-file))
+        (when (and ebal-file
+                   (time-less-p ebal--ebal-mod-time
+                                (ebal--mod-time ebal-file)))
           (ebal--parse-ebal-file ebal-file)
           (setq ebal--ebal-mod-time (ebal--mod-time ebal-file)))
         t))))
@@ -464,7 +484,7 @@ argument when actual command is called as dependency."
                (ebal--actual-command ',name))
            (ignore direct-call)
            ,@body))
-       (push ',function-name
+       (push (cons ',name (function ,function-name))
              ebal--command-alist)
        (cl-pushnew (cons ',name ,global-options)
                    ebal-global-option-alist
@@ -473,29 +493,34 @@ argument when actual command is called as dependency."
                    ebal-command-dependency-alist
                    :key #'car))))
 
+;;;###autoload
 (defun ebal-execute (command)
   "Perform cabal command COMMAND.
 
 When called interactively, propose to choose command with
 `ebal-select-command-function'."
   (interactive
-   (list (funcall ebal-select-command-function
-                  "Choose command: "
-                  (mapcar (lambda (x) (symbol-name (car x)))
-                          ebal--command-alist)
-                  nil
-                  t)))
-  (if (ebal--cabal-available)
-      (if (ebal--prepare)
-          (let ((fnc (cdr (assq command ebal--command-alist))))
-            (when fnc
-              (funcall fnc)))
-        (message "Cannot locate ‘.cabal’ file."))
-    (message "Cannot local Cabal executable on this system.")))
+   (list
+    (intern
+     (funcall
+      ebal-select-command-function
+      "Choose command: "
+      (mapcar (lambda (x) (symbol-name (car x)))
+              ebal--command-alist)
+      nil
+      t))))
+  (when command
+    (if (ebal--cabal-available)
+        (if (ebal--prepare)
+            (let ((fnc (cdr (assq command ebal--command-alist))))
+              (when fnc
+                (funcall fnc)))
+          (message "Cannot locate ‘.cabal’ file."))
+      (message "Cannot local Cabal executable on this system."))))
 
 ;; Definitions of all supported commands.
 
-(ebal--define-command build "--verbose=3" ((configure))
+(ebal--define-command build "--verbose=2" ((configure))
   "Build Cabal target ARG."
   (let ((target
          (or arg
@@ -508,31 +533,31 @@ When called interactively, propose to choose command with
     (ebal--perform-command "build" target)))
 
 (ebal--define-command configure
-    "--verbose=3 --enable-tests --enable-benchmarks" ((install))
+    "--verbose=2 --enable-tests --enable-benchmarks" ((install))
   "Configure how package is built."
   (ebal--perform-dependencies)
   (ebal--perform-command "configure"))
 
-(ebal--define-command sdist "--verbose=3" ()
+(ebal--define-command sdist "--verbose=2" ()
   "Generate a source distribution file (.tag.gz)."
   (ebal--perform-dependencies)
   (ebal--perform-command "sdist"))
 
-(ebal--define-command bench "--verbose=3" ()
+(ebal--define-command bench "--verbose=2" ()
   "Run all/specific benchmarks."
   ;; TODO Improve this so specific benchmarks can be run.
   (ebal--perform-dependencies)
   (ebal--perform-command "bench"))
 
 (ebal--define-command freeze
-    "--verbose=3 --enable-tests --enable-benchmarks" ()
+    "--verbose=2 --enable-tests --enable-benchmarks" ()
   "Calculate a valid set of dependencies and their exact
 versions.  If successful, save the result to the file
 \"cabal.config\"."
   (ebal--perform-dependencies)
   (ebal--perform-command "freeze"))
 
-(ebal--define-command fetch "--verbose=3" ()
+(ebal--define-command fetch "--verbose=2" ()
   "Download packages for later installation."
   (let ((packages
          (or arg
@@ -541,7 +566,7 @@ versions.  If successful, save the result to the file
     (ebal--perform-dependencies)
     (ebal--perform-command "fetch" packages)))
 
-(ebal--define-command haddock "--verbose=3" ()
+(ebal--define-command haddock "--verbose=2" ()
   "Generate Haddock HTML documentation.
 
 Requires the program `haddock'."
@@ -549,23 +574,23 @@ Requires the program `haddock'."
   (ebal--perform-command "haddock"))
 
 (ebal--define-command install
-    "--verbose=3 --only-dependencies --enable-tests --enable-benchmarks"
+    "--verbose=2 --only-dependencies --enable-tests --enable-benchmarks"
     ((update) (sandbox-init))
   "Install necessary packages."
   (ebal--perform-dependencies)
   (ebal--perform-command "install"))
 
-(ebal--define-command check "" ()
+(ebal--define-command check "" () ;; FIXME where check gets its empty arg?
   "Check the package for common mistakes."
   (ebal--perform-dependencies)
   (ebal--perform-command "check" nil t))
 
-(ebal--define-command list "--verbose=3 --installed --simple-output" ()
+(ebal--define-command list "--verbose=2 --installed --simple-output" ()
   "List packages matching a search string."
   (ebal--perform-dependencies)
   (ebal--perform-command "list" nil t))
 
-(ebal--define-command sandbox-init "--verbose=3" ()
+(ebal--define-command sandbox-init "--verbose=2" ()
   "Initialize a sandbox in the current directory.  An existing
 package database will not be modified, but settings (such as the
 location of the database) can be modified this way."
@@ -575,7 +600,7 @@ location of the database) can be modified this way."
       (ebal--perform-dependencies)
       (ebal--perform-command "sandbox init"))))
 
-(ebal--define-command info "--verbose=3" ()
+(ebal--define-command info "--verbose=2" ()
   "Display detailed information about a particular package."
   (let ((package
          (or arg
@@ -587,24 +612,24 @@ location of the database) can be modified this way."
     (ebal--perform-dependencies)
     (ebal--perform-command "info" package t)))
 
-(ebal--define-command test "--verbose=3" ((build "tests"))
+(ebal--define-command test "--verbose=2" ((build "tests"))
   "Run all/specific tests in the test suite."
   ;; TODO allow to run specific test components
   (ebal--perform-dependencies)
   (ebal--perform-command "test"))
 
-(ebal--define-command update "--verbose=3" ()
+(ebal--define-command update "--verbose=2" ()
   "Update list of known packages."
   (ebal--perform-dependencies)
   (ebal--perform-command "update"))
 
-(ebal--define-command sandbox-delete "--verbose=3" ()
+(ebal--define-command sandbox-delete "--verbose=2" ()
   "Remove the sandbox deleting all the packages installed inside."
-  (when (eball--sandbox-exists ebal--last-directory)
+  (when (ebal--sandbox-exists ebal--last-directory)
     (ebal--perform-dependencies)
     (ebal--perform-command "sandbox delete")))
 
-(ebal--define-command clean "--verbose=3" ()
+(ebal--define-command clean "--verbose=2" ()
   "Clean up after a build."
   (ebal--perform-dependencies)
   (ebal--perform-command "clean"))

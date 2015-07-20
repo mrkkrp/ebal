@@ -44,7 +44,7 @@
    something. We can use it during development to postpone writing of nice
    popup generating function. Final product should also contain alternatives
    to popup interface since it costs nothing for us.
-* TODO Design
+* DONE Design
 ** DONE General execution
    Every command is one invocation of ‘cabal’ executable. Command line is
    built in the following way:
@@ -81,7 +81,7 @@
 *** DONE documentation
 *** DONE body
 ** DONE Use long versions of options for readability
-** TODO Parse existing cabal file
+** DONE Parse existing cabal file
    To assist some commands we need to parse actual cabal file. Support of
    full specification is probably not needed, we could extract only useful
    bits.
