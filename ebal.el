@@ -134,6 +134,20 @@ contains \"*.cabal\" file)."
   :type '(alist :key-type symbol
                 :value-type (string :tag "Command Line Options")))
 
+;;;###autoload
+(defcustom ebal-command-dependency-alist nil
+  "Alist that maps names of commands to list of their dependecies.
+
+List of dependecies contains symbols — names of commands to call
+if `ebal-command-dependency' is not NIL."
+  :tag "Command Dependencies"
+  :type '(alist
+          :key-type symbol
+          :value-type (repeat
+                       :tag "Dependencies"
+                       (cons (symbol :tag "Command Name")
+                             (repeat :tag "Argument" string)))))
+
 (defcustom ebal-command-dependency t
   "Whether or not perform dependencies of commands.
 
@@ -346,18 +360,23 @@ enabled (see `ebal-bury-on-success').
 This is low-level operation, it doesn't run `ebal--prepare', thus
 it cannot be used on its own by user."
   (run-hooks ebal-before-command-hook)
-  (let ((default-directory ebal--last-directory)
-        (compilation-buffer-name-function
-         (lambda (_major-mode)
-           (format "*%s*"
-                   (downcase
-                    (replace-regexp-in-string
-                     "[[:space:]]"
-                     "-"
-                     (concat ebal--project-name
-                             "="
-                             command))))))
-        (temp-window-config (current-window-configuration)))
+  (let* ((default-directory ebal--last-directory)
+         (compilation-buffer-name-function
+          (lambda (_major-mode)
+            (format "*%s*"
+                    (downcase
+                     (replace-regexp-in-string
+                      "[[:space:]]"
+                      "-"
+                      (concat ebal--project-name
+                              "/"
+                              command))))))
+         (temp-window-config (current-window-configuration))
+         (exit-code 0)
+         (compilation-exit-message-function
+          (lambda (_process-status exit-status message)
+            (setq exit-code exit-status)
+            (cons message exit-status))))
     (compile
      (mapconcat
       #'shell-quote-argument
@@ -370,23 +389,62 @@ it cannot be used on its own by user."
         (cdr (assq ebal--actual-command ebal-project-option-alist))
         arg))
       " "))
-    (when (and nil ; FIXME: test successful-compilation
+    (when (and (zerop exit-code)
                ebal-bury-on-success
                (not dont-bury))
       (set-window-configuratin temp-window-config)))
   (run-hook ebal-after-command-hook))
 
-(defmacro ebal--define-command ;; TODO finish this
-    (name global-options doc-string &rest body)
-  ""
+(defun ebal--perform-dependencies ()
+  "Perform all dependencies of `ebal--actual-command'.
+
+This is used to handle command dependency."
+  (when ebal-command-dependency
+    (dolist (item (cdr (assq ebal--actual-command
+                             ebal-command-dependency-alist)))
+      (cl-destructuring-bind (command . args) item
+        (apply (cdr (assq command ebal--command-alist)) args)))))
+
+(defmacro ebal--define-command
+    (name global-options dependencies doc-string &rest body)
+  "Define new Ebal command named NAME.
+
+GLOBAL-OPTIONS should be a string (or NIL) that contains all the
+command line options that should be always used with this
+command.
+
+DEPENDENCIES should be a list with names of commands that may be
+called before execution of actual command.  To take advantage of
+this parameter, you can call `ebal--perform-dependencies'.
+
+DOC-STRING is description of the command, BODY is an implicit
+PROGN.
+
+Note that `ebal--actual-command' is let-bound to name of actual
+command inside of BODY.  Also, inside the BODY, `non-direct-call'
+is bound to truly value if this command is called directly by
+user.  Some commands can check ARG variable that's bound to
+argument when actual command is called as dependency."
   (declare (indent 3))
   (let ((function-name
          (intern (concat "ebal--command-"
                          (symbol-name name)))))
-    `(defun ,function-name ()
-       ,doc-string
-
-       )))
+    `(progn
+       (defun ,function-name (&optional arg)
+         ,doc-string
+         (ignore arg)
+         (let ((direct-call (null ebal--actual-command))
+               (ebal--actual-command ',name))
+           (ignore direct-call)
+           ,@body))
+       (push ',function-name
+             ebal--command-alist)
+       (cl-pushnew (cons ',name ,global-options)
+                   ebal-global-option-alist
+                   :key #'car)
+       (cl-pushnew (cons ',name ',dependencies)
+                   ebal-command-dependency-alist
+                   :key #'car))))
 
 (defun ebal--cabal-available ()
   "Return non-NIL if location of Cabal executable known, and NIL otherwise."
@@ -410,7 +468,18 @@ When called interactively, propose to choose command with
 
 ;; TODO: write all the supported commands
 
-;; TODO `build'
+(ebal--define-command build "" ((configure))
+  "Build Cabal target ARG."
+  (let ((target
+         (or arg
+             (funcall ebal-completing-read-function
+                      "Build target: "
+                      ebal--project-targets
+                      nil
+                      t))))
+    (ebal--perform-dependencies)
+    (ebal--perform-command "build" target)))
+
 ;; TODO `configure'
 ;; TODO `sdist'
 ;; TODO `bench'
@@ -429,6 +498,32 @@ When called interactively, propose to choose command with
 ;; TODO `clean'
 
 ;; TODO: UI — various versions of completing read, IDO (for arguments)
+
+;; (defun magit-builtin-completing-read
+;;   (prompt choices &optional predicate require-match initial-input hist def)
+;;   "Magit wrapper for standard `completing-read' function."
+;;   (completing-read (magit-prompt-with-default prompt def)
+;;                    choices predicate require-match
+;;                    initial-input hist def))
+
+;; (defun magit-ido-completing-read
+;;   (prompt choices &optional predicate require-match initial-input hist def)
+;;   "Ido-based `completing-read' almost-replacement.
+
+;; Unfortunately `ido-completing-read' is not suitable as a
+;; drop-in replacement for `completing-read', instead we use
+;; `ido-completing-read+' from the third-party package by the
+;; same name."
+;;   (if (require 'ido-completing-read+ nil t)
+;;       (ido-completing-read+ prompt choices predicate require-match
+;;                             initial-input hist def)
+;;     (display-warning 'magit "ido-completing-read+ is not installed
+
+;; To use Ido completion with Magit you need to install the
+;; third-party `ido-completing-read+' packages.  Falling
+;; back to built-in `completing-read' for now." :error)
+;;     (magit-builtin-completing-read prompt choices predicate require-match
+;;                                    initial-input hist def)))
 
 ;; TODO: UI — various ways to select commands (including popup)
 

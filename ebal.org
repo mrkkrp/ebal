@@ -58,26 +58,26 @@
    This is put into ‘compile’ with let-bound ‘default-directory’. Name the
    buffer the same as project is named but with asterisks. This can be
    easily done with help of ‘compilation-buffer-name-function’.
-** TODO Use DSL to code cabal commands and their interactions
+** DONE Use DSL to code cabal commands and their interactions
    The main tool to build our system should be ‘ebal-define-command’ macro,
    the following things we can specify with it:
 *** DONE name (symbol)
     Actual function is defined with name ‘ebal-command-<name>’. This name is
     also used to identify the command.
-*** TODO cabal command (string)
+*** DONE cabal command (string)
 *** DONE general options (to be added to ‘ebal-global-options’)
-*** TODO function to generate list of argument values
+*** DONE function to generate list of argument values
     To feed it to IDO or completing read. If such function is given, ARG is
     available inside of BODY. Make sure that even when IDO or plain
     ‘completing-read’ is used, it allows not expected input (it's often
     needed).
-*** TODO list of commands that should be checked/called before
+*** DONE list of commands that should be checked/called before
     This should be of the following form:
     (command &rest argument-list)
-*** TODO optionally predicate
+*** DONE optionally predicate
     To determine if it can be called as dependency of other command. This
     can ask user in some cases (for some commands).
-*** TODO flag to determine if it can be buried on success
+*** DONE flag to determine if it can be buried on success
 *** DONE documentation
 *** DONE body
 ** TODO Use long versions of options for readability
@@ -87,7 +87,7 @@
    bits.
 * TODO Supported Commands
   Here is the actual list and one-letter shortcuts:
-** TODO [b] build
+** DONE [b] build
 ** TODO [c] configure
 ** TODO [d] sdist
 ** TODO [e] bench
@@ -121,8 +121,8 @@
 ** DONE ‘ebal-after-init-hook’
 ** DONE ‘ebal-before-command-hook’
 ** DONE ‘ebal-after-command-hook’
-* TODO Don't forget to check
-** TODO Availability of Cabal executable
+* DONE Don't forget to check
+** DONE Availability of Cabal executable
    User should be able to set path to cabal if the system cannot find it
    automatically. This should be checked before any work is attempted, use
    macro (?).
