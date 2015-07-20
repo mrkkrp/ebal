@@ -80,32 +80,32 @@
 *** DONE flag to determine if it can be buried on success
 *** DONE documentation
 *** DONE body
-** TODO Use long versions of options for readability
+** DONE Use long versions of options for readability
 ** TODO Parse existing cabal file
    To assist some commands we need to parse actual cabal file. Support of
    full specification is probably not needed, we could extract only useful
    bits.
-* TODO Supported Commands
+* DONE Supported Commands
   Here is the actual list and one-letter shortcuts:
 ** DONE [b] build
-** TODO [c] configure
-** TODO [d] sdist
-** TODO [e] bench
-** TODO [f] freeze
-** TODO [g] fetch
-** TODO [h] haddock
-** TODO [i] install
+** DONE [c] configure
+** DONE [d] sdist
+** DONE [e] bench
+** DONE [f] freeze
+** DONE [g] fetch
+** DONE [h] haddock
+** DONE [i] install
    cabal install --only-dependencies --enable-tests --enable-benchmarks
    check out what do they say about profiling, maybe we should add it too
-** TODO [k] check
-** TODO [l] list
-** TODO [n] sandbox init
-** TODO [o] info
-** TODO [r] run
-** TODO [t] test
-** TODO [u] update
-** TODO [x] sandbox delete
-** TODO [z] clean
+** DONE [k] check
+** DONE [l] list
+** DONE [n] sandbox init
+** DONE [o] info
+** [r] run
+** DONE [t] test
+** DONE [u] update
+** DONE [x] sandbox delete
+** DONE [z] clean
 * TODO Command to generate .cabal file
   Default wizard sucks. This needs to be done entirely in Emacs Lisp. I
   think we should name the command ‘ebal-init’. If ‘ebal-sandboxing’ is

@@ -30,6 +30,7 @@
 ;;; Code:
 
 (require 'cl-lib)
+(require 'compile)
 (require 'f)
 (require 'mmt)
 
@@ -392,8 +393,8 @@ it cannot be used on its own by user."
     (when (and (zerop exit-code)
                ebal-bury-on-success
                (not dont-bury))
-      (set-window-configuratin temp-window-config)))
-  (run-hook ebal-after-command-hook))
+      (set-window-configuration temp-window-config)))
+  (run-hooks ebal-after-command-hook))
 
 (defun ebal--perform-dependencies ()
   "Perform all dependencies of `ebal--actual-command'.
@@ -466,9 +467,9 @@ When called interactively, propose to choose command with
         (message "Cannot locate ‘.cabal’ file."))
     (message "Cannot local Cabal executable on this system.")))
 
-;; TODO: write all the supported commands
+;; Definitions of all supported commands.
 
-(ebal--define-command build "" ((configure))
+(ebal--define-command build "--verbose=3" ((configure))
   "Build Cabal target ARG."
   (let ((target
          (or arg
@@ -480,22 +481,109 @@ When called interactively, propose to choose command with
     (ebal--perform-dependencies)
     (ebal--perform-command "build" target)))
 
-;; TODO `configure'
-;; TODO `sdist'
-;; TODO `bench'
-;; TODO `freeze'
-;; TODO `fetch'
-;; TODO `haddock'
-;; TODO `install'
-;; TODO `check'
-;; TODO `list'
-;; TODO `sandbox-init'
-;; TODO `info'
-;; TODO `run'
-;; TODO `test'
-;; TODO `update'
-;; TODO `sandbox-delete'
-;; TODO `clean'
+(ebal--define-command configure
+    "--verbose=3 --enable-tests --enable-benchmarks" ((install))
+  "Configure how package is built."
+  (ebal--perform-dependencies)
+  (ebal--perform-command "configure"))
+
+(ebal--define-command sdist "--verbose=3" ()
+  "Generate a source distribution file (.tag.gz)."
+  (ebal--perform-dependencies)
+  (ebal--perform-command "sdist"))
+
+(ebal--define-command bench "--verbose=3" ()
+  "Run all/specific benchmarks."
+  ;; TODO Improve this so specific benchmarks can be run.
+  (ebal--perform-dependencies)
+  (ebal--perform-command "bench"))
+
+(ebal--define-command freeze
+    "--verbose=3 --enable-tests --enable-benchmarks" ()
+  "Calculate a valid set of dependencies and their exact
+versions.  If successful, save the result to the file
+\"cabal.config\"."
+  (ebal--perform-dependencies)
+  (ebal--perform-command "freeze"))
+
+(ebal--define-command fetch "--verbose=3" ()
+  "Download packages for later installation."
+  (let ((packages
+         (or arg
+             (funcall ebal-completing-read-function
+                      "Packages to fetch: "))))
+    (ebal--perform-dependencies)
+    (ebal--perform-command "fetch" packages)))
+
+(ebal--define-command haddock "--verbose=3" ()
+  "Generate Haddock HTML documentation.
+
+Requires the program `haddock'."
+  (ebal--perform-dependencies)
+  (ebal--perform-command "haddock"))
+
+(ebal--define-command install
+    "--verbose=3 --only-dependencies --enable-tests --enable-benchmarks"
+    ((update) (sandbox-init))
+  "Install necessary packages."
+  (ebal--perform-dependencies)
+  (ebal--perform-command "install"))
+
+(ebal--define-command check "" ()
+  "Check the package for common mistakes."
+  (ebal--perform-dependencies)
+  (ebal--perform-command "check" nil t))
+
+(ebal--define-command list "--verbose=3 --installed --simple-output" ()
+  "List packages matching a search string."
+  (ebal--perform-dependencies)
+  (ebal--perform-command "list" nil t))
+
+(ebal--define-command sandbox-init "--verbose=3" ()
+  "Initialize a sandbox in the current directory.  An existing
+package database will not be modified, but settings (such as the
+location of the database) can be modified this way."
+  ;; FIXME check if sandbox already exists and do nothing in this case, also
+  ;; sandbox policy should be taken into account here (also check if it's a
+  ;; direct call or dependency call)
+  (ebal--perform-dependencies)
+  (ebal--perform-command "sandbox init"))
+
+(ebal--define-command info "--verbose=3" ()
+  "Display detailed information about a particular package."
+  ;; FIXME build table of all installed packages for completing read
+  (let ((package
+         (or arg
+             (funcall ebal-completing-read-function
+                      "Show info about package: "
+                      nil ;; list of installed packages
+                      nil
+                      t))))
+    (ebal--perform-dependencies)
+    (ebal--perform-command "info" package t)))
+
+(ebal--define-command test "--verbose=3" ((build "tests"))
+  "Run all/specific tests in the test suite."
+  ;; TODO allow to run specific test components
+  (ebal--perform-dependencies)
+  (ebal--perform-command "test"))
+
+(ebal--define-command update "--verbose=3" ()
+  "Update list of known packages."
+  (ebal--perform-dependencies)
+  (ebal--perform-command "update"))
+
+(ebal--define-command sandbox-delete "--verbose=3" ()
+  "Remove the sandbox deleting all the packages installed inside."
+  ;; FIXME check if sandbox already exists and perform the command only if
+  ;; it does.
+  (ebal--perform-dependencies)
+  (ebal--perform-command "sandbox delete"))
+
+(ebal--define-command clean "--verbose=3" ()
+  "Clean up after a build."
+  (ebal--perform-dependencies)
+  (ebal--perform-command "clean"))
 
 ;; TODO: UI — various versions of completing read, IDO (for arguments)
 
@@ -525,55 +613,13 @@ When called interactively, propose to choose command with
 ;;     (magit-builtin-completing-read prompt choices predicate require-match
 ;;                                    initial-input hist def)))
 
+;; NOTE ↑ We need to finish all this stuff, implement full functionality and
+;; also refactor it a bit. This needs to be well-tested before we can
+;; continue to popups and other nice (and easier) things.
+
 ;; TODO: UI — various ways to select commands (including popup)
 
 ;; TODO: UI — implement setup wizard in Emacs Lisp (`ebal-init')
-
-(defvar ebal-cabal-operations
-  '((build          . "cabal build")
-    (check          . "cabal check")
-    (clean          . "cabal clean")
-    (configure      . "cabal configure --enable-tests --enable-benchmarks")
-    (init           . "cabal init")
-    (install        . "cabal update ; \
-cabal install --only-dependencies --enable-tests --enable-benchmarks")
-    (run            . "cabal run")
-    (sandbox-delete . "cabal sandbox delete")
-    (sandbox-init   . "cabal sandbox init")
-    (sdist          . "cabal sdist")
-    (test           . "cabal test --test-option=\"--maximum-test-size=50\""))
-  "Collection of operations supported by `ebal-cabal-action'.")
-
-(defun ebal-find-file (regexp)
-  "Find file whose name satisfies REGEXP traversing upwards.
-Return absolute path to directory containing that file or NIL on
-failure."
-  (f-traverse-upwards
-   (lambda (path)
-     (directory-files path t regexp t))
-   (expand-file-name default-directory)))
-
-(defun ebal-cabal-action (command)
-  "Perform a Cabal command COMMAND.
-COMMAND can be one of the operations listed in
-`ebal-cabal-operations'.  Completing read is used if the command is
-called interactively."
-  (interactive
-   (list
-    (intern
-     (completing-read
-      "Cabal operation: "
-      (mapcar (lambda (x) (symbol-name (car x)))
-              ebal-cabal-operations)
-      nil
-      t))))
-  (let ((dir (ebal-find-file "\\`.+\\.cabal\\'")))
-    (if dir
-        (compile
-         (format "cd %s ; %s"
-                 dir
-                 (cdr (assoc command ebal-cabal-operations))))
-      (message "Please create ‘.cabal’ file for the project."))))
 
 (provide 'ebal)
 
