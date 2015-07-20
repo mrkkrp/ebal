@@ -5,7 +5,7 @@
 ;; Author: Mark Karpov <markkarpov@openmailbox.org>
 ;; URL: https://github.com/mrkkrp/ebal
 ;; Version: 0.1.0
-;; Package-Requires: ((emacs "24.4") (cl-lib "0.5") (f "1.6") (mmt "0.1.0"))
+;; Package-Requires: ((emacs "24.4") (cl-lib "0.5") (f "1.6") (ido-completing-read+"3.6"))
 ;; Keywords: convenience, cabal, haskell
 ;;
 ;; This file is not part of GNU Emacs.
@@ -211,9 +211,9 @@ buffer, but you can use IDO-powered variant if you like or plain
 The function is called with no arguments, it should return symbol
 specifying chosen command."
   :tag "How to Select Command"
-  :type '(radio (function-item ebal-command-popup)
+  :type '(radio (function-item ebal-command-completing-read)
                 (function-item ebal-command-ido)
-                (function-item ebal-command-completing-read)))
+                (function-item ebal-command-popup)))
 
 (defcustom ebal-before-init-hook nil
   "Hook to run before execution of `ebal-init' function."
@@ -237,7 +237,7 @@ You can check name of the command in `ebal--actual-command'."
   :tag "After Command Hook"
   :type 'hook)
 
-;; Preparation, parsing of Cabal and Ebal files.
+;; Various utilities.
 
 (defun ebal--parse-cabal-file (_filename)
   "Parse \"*.cabal\" file with name FILENAME and set some variables.
@@ -282,6 +282,32 @@ failure.  Returned path is guaranteed to have trailing slash."
 (defun ebal--mod-time (filename)
   "Return time of last modification of file FILENAME."
   (nth 5 (file-attributes filename 'integer)))
+
+(defun ebal--cabal-available ()
+  "Return non-NIL if location of Cabal executable known, and NIL otherwise."
+  (or (executable-find "cabal")
+      (and ebal-cabal-executable
+           (f-file? ebal-cabal-executable))))
+
+(defun ebal--sandbox-exists (dir)
+  "Return non-NIL value if sandbox exists in DIR."
+  ;; FIXME write me, please
+  nil)
+
+(defun ebal--implicit-sandbox-request ()
+  "Return non-NIL value if sandbox should be implicitly created."
+  (if (eql ebal-sandboxing 'ask)
+      (yes-or-no-p "Create sandbox here?")
+    ebal-sandboxing))
+
+(defun ebal--installed-packages (dir)
+  "Call Cabal as if from directory DIR and return list of installed packages.
+
+This uses variation \"cabal list\" internally."
+  ;; FIXME write me, please
+  nil)
+
+;; Preparation.
 
 (defun ebal--prepare ()
   "Locate, read, and parse configuration files and set various variables.
@@ -447,18 +473,18 @@ argument when actual command is called as dependency."
                    ebal-command-dependency-alist
                    :key #'car))))
 
-(defun ebal--cabal-available ()
-  "Return non-NIL if location of Cabal executable known, and NIL otherwise."
-  (or (executable-find "cabal")
-      (and ebal-cabal-executable
-           (f-file? ebal-cabal-executable))))
-
 (defun ebal-execute (command)
   "Perform cabal command COMMAND.
 
 When called interactively, propose to choose command with
 `ebal-select-command-function'."
-  ;; FIXME: this should be interactive
+  (interactive
+   (list (funcall ebal-select-command-function
+                  "Choose command: "
+                  (mapcar (lambda (x) (symbol-name (car x)))
+                          ebal--command-alist)
+                  nil
+                  t)))
   (if (ebal--cabal-available)
       (if (ebal--prepare)
           (let ((fnc (cdr (assq command ebal--command-alist))))
@@ -543,20 +569,19 @@ Requires the program `haddock'."
   "Initialize a sandbox in the current directory.  An existing
 package database will not be modified, but settings (such as the
 location of the database) can be modified this way."
-  ;; FIXME check if sandbox already exists and do nothing in this case, also
-  ;; sandbox policy should be taken into account here (also check if it's a
-  ;; direct call or dependency call)
-  (ebal--perform-dependencies)
-  (ebal--perform-command "sandbox init"))
+  (unless (ebal--sandbox-exists ebal--last-directory)
+    (when (or direct-call
+              (ebal--implicit-sandbox-request))
+      (ebal--perform-dependencies)
+      (ebal--perform-command "sandbox init"))))
 
 (ebal--define-command info "--verbose=3" ()
   "Display detailed information about a particular package."
-  ;; FIXME build table of all installed packages for completing read
   (let ((package
          (or arg
              (funcall ebal-completing-read-function
                       "Show info about package: "
-                      nil ;; list of installed packages
+                      (ebal--installed-packages ebal--last-directory)
                       nil
                       t))))
     (ebal--perform-dependencies)
@@ -575,49 +600,26 @@ location of the database) can be modified this way."
 
 (ebal--define-command sandbox-delete "--verbose=3" ()
   "Remove the sandbox deleting all the packages installed inside."
-  ;; FIXME check if sandbox already exists and perform the command only if
-  ;; it does.
-  (ebal--perform-dependencies)
-  (ebal--perform-command "sandbox delete"))
+  (when (eball--sandbox-exists ebal--last-directory)
+    (ebal--perform-dependencies)
+    (ebal--perform-command "sandbox delete")))
 
 (ebal--define-command clean "--verbose=3" ()
   "Clean up after a build."
   (ebal--perform-dependencies)
   (ebal--perform-command "clean"))
 
-;; TODO: UI — various versions of completing read, IDO (for arguments)
+;; User interface.
 
-;; (defun magit-builtin-completing-read
-;;   (prompt choices &optional predicate require-match initial-input hist def)
-;;   "Magit wrapper for standard `completing-read' function."
-;;   (completing-read (magit-prompt-with-default prompt def)
-;;                    choices predicate require-match
-;;                    initial-input hist def))
-
-;; (defun magit-ido-completing-read
-;;   (prompt choices &optional predicate require-match initial-input hist def)
-;;   "Ido-based `completing-read' almost-replacement.
-
-;; Unfortunately `ido-completing-read' is not suitable as a
-;; drop-in replacement for `completing-read', instead we use
-;; `ido-completing-read+' from the third-party package by the
-;; same name."
-;;   (if (require 'ido-completing-read+ nil t)
-;;       (ido-completing-read+ prompt choices predicate require-match
-;;                             initial-input hist def)
-;;     (display-warning 'magit "ido-completing-read+ is not installed
-
-;; To use Ido completion with Magit you need to install the
-;; third-party `ido-completing-read+' packages.  Falling
-;; back to built-in `completing-read' for now." :error)
-;;     (magit-builtin-completing-read prompt choices predicate require-match
-;;                                    initial-input hist def)))
+(defalias 'ebal-built-in-completing-read 'completing-read)
+(defalias 'ebal-ido-completing-read      'ido-completing-read+)
+(defalias 'ebal-command-completing-read  'completing-read)
+(defalias 'ebal-command-ido              'ido-completing-read+)
+(defalias 'ebal-command-popup            'ebal-command-ido) ;; FIXME
 
 ;; NOTE ↑ We need to finish all this stuff, implement full functionality and
 ;; also refactor it a bit. This needs to be well-tested before we can
 ;; continue to popups and other nice (and easier) things.
-
-;; TODO: UI — various ways to select commands (including popup)
 
 ;; TODO: UI — implement setup wizard in Emacs Lisp (`ebal-init')
 
