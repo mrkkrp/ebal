@@ -517,7 +517,10 @@ versions.  If successful, save the result to the file
   (let ((packages
          (or arg
              (funcall ebal-completing-read-function
-                      "Packages to fetch: "))))
+                      "Packages to fetch: "
+                      (ebal--installed-packages ebal--last-directory)
+                      nil
+                      t))))
     (ebal--perform-command "fetch" packages)))
 
 (ebal--define-command haddock ?h nil
