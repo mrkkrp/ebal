@@ -5,7 +5,7 @@
 ;; Author: Mark Karpov <markkarpov@openmailbox.org>
 ;; URL: https://github.com/mrkkrp/ebal
 ;; Version: 0.1.0
-;; Package-Requires: ((emacs "24.4") (cl-lib "0.5") (f "1.6") (ido-completing-read+ "3.6"))
+;; Package-Requires: ((emacs "24.4") (f "1.6") (ido-completing-read+ "3.6"))
 ;; Keywords: convenience, cabal, haskell
 ;;
 ;; This file is not part of GNU Emacs.
@@ -29,10 +29,10 @@
 
 ;;; Code:
 
+(require 'button)
 (require 'cl-lib)
 (require 'compile)
 (require 'f)
-(require 'mmt)
 
 ;; Settings & Variables
 
@@ -118,7 +118,9 @@ specific project, see `ebal-project-option-alist' and
 corresponding setup instructions."
   :tag "Global Options for Ebal Commands"
   :type '(alist :key-type symbol
-                :value-type (string :tag "Command Line Options")))
+                :value-type
+                (choice (string :tag "Options")
+                        (const  :tag "No Options" nil))))
 
 (defcustom ebal-project-option-alist nil
   "Alist that maps names of commands to their default options.
@@ -133,7 +135,9 @@ present in project's root directory (the same directory that
 contains \"*.cabal\" file)."
   :tag "Project Specific Options"
   :type '(alist :key-type symbol
-                :value-type (string :tag "Command Line Options")))
+                :value-type
+                (choice (string :tag "Options")
+                        (const  :tag "No Options" nil))))
 
 (defcustom ebal-sandboxing 'ask
   "This determines Ebal's policy towards sandboxing.
@@ -177,6 +181,15 @@ specifying chosen command."
   :type '(radio (function-item ebal-command-completing-read)
                 (function-item ebal-command-ido)
                 (function-item ebal-command-popup)))
+
+;;;###autoload
+(defcustom ebal-popup-key-alist nil
+  "Alist that maps names of commands to keys used in Ebal popup.
+
+This is used by `ebal-command-popup'."
+  :tag "Keys Used in Ebal Popup"
+  :type '(alist :key-type character
+                :value-type (symbol :tag "Command Name")))
 
 (defcustom ebal-before-init-hook nil
   "Hook to run before execution of `ebal-init' function."
@@ -357,8 +370,9 @@ Returned value is T on success and NIL on failure (when no
           (ebal--parse-cabal-file cabal-file)
           (setq ebal--cabal-mod-time (ebal--mod-time cabal-file)))
         (when (and ebal-file
-                   (time-less-p ebal--ebal-mod-time
-                                (ebal--mod-time ebal-file)))
+                   (or (not ebal--ebal-mod-time)
+                       (time-less-p ebal--ebal-mod-time
+                                    (ebal--mod-time ebal-file))))
           (ebal--parse-ebal-file ebal-file)
           (setq ebal--ebal-mod-time (ebal--mod-time ebal-file)))
         t))))
@@ -401,8 +415,11 @@ it cannot be used on its own by user."
       " ")))
   (run-hooks ebal-after-command-hook))
 
-(defmacro ebal--define-command (name global-options doc-string &rest body)
+(defmacro ebal--define-command (name kbd global-options doc-string &rest body)
   "Define new Ebal command named NAME.
+
+KBD is keybinding (a character) that is used by
+`ebal-command-popup' function.
 
 GLOBAL-OPTIONS should be a string (or NIL) that contains all the
 command line options that should be always used with this
@@ -416,7 +433,7 @@ command inside of BODY.  Also, inside the BODY, `non-direct-call'
 is bound to truly value if this command is called directly by
 user.  Some commands can check ARG variable that's bound to
 argument when actual command is called as dependency."
-  (declare (indent 2))
+  (declare (indent 3))
   (let ((function-name
          (intern (concat "ebal--command-"
                          (symbol-name name)))))
@@ -428,6 +445,9 @@ argument when actual command is called as dependency."
            ,@body))
        (push (cons ',name (function ,function-name))
              ebal--command-alist)
+       (cl-pushnew (cons ,kbd ',name)
+                   ebal-popup-key-alist
+                   :key #'car)
        (cl-pushnew (cons ',name ,global-options)
                    ebal-global-option-alist
                    :key #'car))))
@@ -459,7 +479,7 @@ When called interactively, propose to choose command with
 
 ;; Definitions of all supported commands.
 
-(ebal--define-command build nil
+(ebal--define-command build ?b nil
   "Build Cabal target ARG."
   (let ((target
          (or arg
@@ -471,28 +491,28 @@ When called interactively, propose to choose command with
     (apply #'ebal--perform-command
            "build"
            (unless (string= target "default")
-             target))))
+             (list target)))))
 
-(ebal--define-command configure "--enable-tests --enable-benchmarks"
+(ebal--define-command configure ?c "--enable-tests --enable-benchmarks"
   "Configure how package is built."
   (ebal--perform-command "configure"))
 
-(ebal--define-command sdist nil
+(ebal--define-command sdist ?d nil
   "Generate a source distribution file (.tag.gz)."
   (ebal--perform-command "sdist"))
 
-(ebal--define-command bench nil
+(ebal--define-command bench ?e nil
   "Run all/specific benchmarks."
   ;; TODO Improve this so specific benchmarks can be run.
   (ebal--perform-command "bench"))
 
-(ebal--define-command freeze "--enable-tests --enable-benchmarks"
+(ebal--define-command freeze ?f "--enable-tests --enable-benchmarks"
   "Calculate a valid set of dependencies and their exact
 versions.  If successful, save the result to the file
 \"cabal.config\"."
   (ebal--perform-command "freeze"))
 
-(ebal--define-command fetch nil
+(ebal--define-command fetch ?g nil
   "Download packages for later installation."
   (let ((packages
          (or arg
@@ -500,35 +520,37 @@ versions.  If successful, save the result to the file
                       "Packages to fetch: "))))
     (ebal--perform-command "fetch" packages)))
 
-(ebal--define-command haddock nil
+(ebal--define-command haddock ?h nil
   "Generate Haddock HTML documentation.
 
 Requires the program `haddock'."
   (ebal--perform-command "haddock"))
 
-(ebal--define-command install
-    "--only-dependencies --enable-tests --enable-benchmarks"
+(ebal--define-command install ?i
+                      "--only-dependencies --enable-tests --enable-benchmarks"
   "Install necessary packages."
   (if (and (not (ebal--sandbox-exists-p ebal--last-directory))
            (ebal--implicit-sandbox-p))
       (funcall (cdr (assq 'sandbox-init ebal--command-alist)))
     (ebal--perform-command "install")))
 
-(ebal--define-command check nil
+(ebal--define-command check ?k nil
   "Check the package for common mistakes."
   (ebal--perform-command "check" nil))
 
-(ebal--define-command list "--installed --simple-output"
+(ebal--define-command list ?l "--installed --simple-output"
   "List packages matching a search string."
   (ebal--perform-command "list" nil))
 
-(ebal--define-command sandbox-init nil
+(ebal--define-command sandbox-init ?n nil
   "Initialize a sandbox in the current directory.  An existing
 package database will not be modified, but settings (such as the
 location of the database) can be modified this way."
-  (ebal--perform-command "sandbox init"))
+  (if (ebal--sandbox-exists-p ebal--last-directory)
+      (message "Sandbox already exists")
+    (ebal--perform-command "sandbox init")))
 
-(ebal--define-command info nil
+(ebal--define-command info ?o nil
   "Display detailed information about a particular package."
   (let ((package
          (or arg
@@ -539,21 +561,23 @@ location of the database) can be modified this way."
                       t))))
     (ebal--perform-command "info" package)))
 
-(ebal--define-command test nil
+(ebal--define-command test ?t nil
   "Run all/specific tests in the test suite."
   ;; TODO allow to run specific test components
   (ebal--perform-command "test"))
 
-(ebal--define-command update nil
+(ebal--define-command update ?u nil
   "Update list of known packages."
   (ebal--perform-command "update"))
 
-(ebal--define-command sandbox-delete nil
+(ebal--define-command sandbox-delete ?x nil
   "Remove the sandbox deleting all the packages installed inside."
-  (when (yes-or-no-p "Really delete the sandbox and all packages?")
-    (ebal--perform-command "sandbox delete")))
+  (if (ebal--sandbox-exists-p ebal--last-directory)
+      (when (yes-or-no-p "Really delete the sandbox and all packages?")
+        (ebal--perform-command "sandbox delete"))
+    (message "There is no sandbox to delete")))
 
-(ebal--define-command clean nil
+(ebal--define-command clean ?z nil
   "Clean up after a build."
   (ebal--perform-command "clean"))
 
@@ -563,11 +587,82 @@ location of the database) can be modified this way."
 (defalias 'ebal-ido-completing-read      'ido-completing-read+)
 (defalias 'ebal-command-completing-read  'completing-read)
 (defalias 'ebal-command-ido              'ido-completing-read+)
-(defalias 'ebal-command-popup            'ebal-command-ido) ;; FIXME
 
-;; NOTE ↑ We need to finish all this stuff, implement full functionality and
-;; also refactor it a bit. This needs to be well-tested before we can
-;; continue to popups and other nice (and easier) things.
+;; Ebal command popup.
+
+(defun ebal-command-popup
+    (prompt collection &optional predicate
+            _require-match _initial-input _hist _def _inherit-input-method)
+  "Show a popup displaying PROMPT and COLLECTION of buttons.
+
+PREDICATE is used to filter COLLECTION.  Other arguments are
+taken for compatibility and have no effect."
+  (let* ((collection (cl-remove-if-not predicate collection))
+         (col (reverse
+               (cl-remove-if-not
+                (lambda (x)
+                  (member (cdr x) collection))
+                (mapcar
+                 (lambda (x)
+                   (cl-destructuring-bind (key . symbol) x
+                     (cons key (symbol-name symbol))))
+                 ebal-popup-key-alist))))
+         (col-width (+ (cl-reduce
+                        #'max
+                        (mapcar
+                         (lambda (x) (length (cdr x)))
+                         col))
+                       5))
+         (i 0))
+    (when collection
+      (let ((buffer (get-buffer-create "*Cabal Commands*")))
+        (with-current-buffer buffer
+          (with-current-buffer-window
+           ;; buffer or name
+           buffer
+           ;; action (for `display-buffer')
+           (cons 'display-buffer-below-selected
+                 '((window-height . fit-window-to-buffer)
+                   (preserve-size . (nil . t))))
+           ;; quit-function
+           (lambda (window _value)
+             (with-selected-window window
+               (unwind-protect
+                   (cdr
+                    (assq
+                     (read-char-choice
+                      prompt
+                      (mapcar #'car ebal-popup-key-alist))
+                     col))
+                 (when (window-live-p window)
+                   (quit-restore-window window 'kill)))))
+           ;; Here we generate the menu.
+           (setq cursor-type nil)
+           ;; print stuff from collection
+           (insert
+            (propertize (or ebal--project-name "Unknown")
+                        'face 'font-lock-function-name-face))
+           (when ebal--project-version
+             (insert
+              (propertize (format " %s" ebal--project-version)
+                          'face 'font-lock-doc-face)))
+           (insert "\n\n")
+           (insert (propertize "Commands:\n" 'face 'bold))
+           (dolist (item col)
+             (cl-destructuring-bind (key . command) item
+               (insert (propertize (string key)
+                                   'face 'font-lock-keyword-face))
+               (insert (format " %s" command)))
+             (setq i (1+ i))
+             (let ((j (mod i 4)))
+               (if (zerop j)
+                   (insert "\n")
+                 (insert " \t")
+                 (set-text-properties
+                  (1- (point)) (point)
+                  `(display (space :align-to ,(* j col-width)))))))))))))
+
+;; Wizard that helps to create new Cabal projects.
 
 ;; TODO: UI — implement setup wizard in Emacs Lisp (`ebal-init')
 
