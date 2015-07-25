@@ -341,41 +341,41 @@ Returned value is T on success and NIL on failure (when no
           (ebal--find-dir-of-file "^.+\.cabal$"))
          (cabal-file
           (car (and project-directory
-                    (f-glob "*.cabal" project-directory))))
-         (ebal-file
-          (let ((ebal-pretender (f-swap-ext cabal-file "ebal")))
-            (when (f-file? ebal-pretender)
-              ebal-pretender))))
+                    (f-glob "*.cabal" project-directory)))))
     (when cabal-file
-      (if (or (not ebal--last-directory)
-              (not (f-same? ebal--last-directory
-                            project-directory)))
-          (progn
-            ;; We are in different directory (or it's the first invocation).
-            ;; This means we should unconditionally parse everything without
-            ;; checking of date of last modification.
+      (let* ((ebal-pretender (f-swap-ext cabal-file "ebal"))
+             (ebal-file
+              (when (f-file? ebal-pretender)
+                ebal-pretender)))
+        (if (or (not ebal--last-directory)
+                (not (f-same? ebal--last-directory
+                              project-directory)))
+            (progn
+              ;; We are in different directory (or it's the first
+              ;; invocation).  This means we should unconditionally parse
+              ;; everything without checking of date of last modification.
+              (ebal--parse-cabal-file cabal-file)
+              (setq ebal--cabal-mod-time (ebal--mod-time cabal-file))
+              (when ebal-file
+                (ebal--parse-ebal-file ebal-file)
+                (setq ebal--ebal-mod-time (ebal--mod-time ebal-file)))
+              ;; Set last directory for future checks.
+              (setq ebal--last-directory project-directory)
+              t) ;; Return T on success.
+          ;; We are in already visited directory, so we don't need to reset
+          ;; `ebal--last-directory' this time. We need to reread/re-parse
+          ;; *.cabal and *.ebal files if they have been modified though.
+          (when (time-less-p ebal--cabal-mod-time
+                             (ebal--mod-time cabal-file))
             (ebal--parse-cabal-file cabal-file)
-            (setq ebal--cabal-mod-time (ebal--mod-time cabal-file))
-            (when ebal-file
-              (ebal--parse-ebal-file ebal-file)
-              (setq ebal--ebal-mod-time (ebal--mod-time ebal-file)))
-            ;; Set last directory for future checks.
-            (setq ebal--last-directory project-directory)
-            t) ;; Return T on success.
-        ;; We are in already visited directory, so we don't need to reset
-        ;; `ebal--last-directory' this time. We need to reread/re-parse
-        ;; *.cabal and *.ebal files if they have been modified though.
-        (when (time-less-p ebal--cabal-mod-time
-                           (ebal--mod-time cabal-file))
-          (ebal--parse-cabal-file cabal-file)
-          (setq ebal--cabal-mod-time (ebal--mod-time cabal-file)))
-        (when (and ebal-file
-                   (or (not ebal--ebal-mod-time)
-                       (time-less-p ebal--ebal-mod-time
-                                    (ebal--mod-time ebal-file))))
-          (ebal--parse-ebal-file ebal-file)
-          (setq ebal--ebal-mod-time (ebal--mod-time ebal-file)))
-        t))))
+            (setq ebal--cabal-mod-time (ebal--mod-time cabal-file)))
+          (when (and ebal-file
+                     (or (not ebal--ebal-mod-time)
+                         (time-less-p ebal--ebal-mod-time
+                                      (ebal--mod-time ebal-file))))
+            (ebal--parse-ebal-file ebal-file)
+            (setq ebal--ebal-mod-time (ebal--mod-time ebal-file)))
+          t)))))
 
 ;; Low-level construction of individual commands and their execution via
 ;; `compile'.
@@ -453,29 +453,29 @@ argument when actual command is called as dependency."
                    :key #'car))))
 
 ;;;###autoload
-(defun ebal-execute (command)
+(defun ebal-execute (&optional command)
   "Perform cabal command COMMAND.
 
-When called interactively, propose to choose command with
-`ebal-select-command-function'."
-  (interactive
-   (list
-    (intern
-     (funcall
-      ebal-select-command-function
-      "Choose command: "
-      (mapcar (lambda (x) (symbol-name (car x)))
-              ebal--command-alist)
-      nil
-      t))))
-  (when command
-    (if (ebal--cabal-available-p)
-        (if (ebal--prepare)
-            (let ((fnc (cdr (assq command ebal--command-alist))))
-              (when fnc
-                (funcall fnc)))
-          (message "Cannot locate ‘.cabal’ file."))
-      (message "Cannot local Cabal executable on this system."))))
+When called interactively or when COMMAND is NIL, propose to
+choose command with `ebal-select-command-function'."
+  (interactive)
+  (if (ebal--cabal-available-p)
+      (if (ebal--prepare)
+          (let* ((command
+                  (or command
+                      (intern
+                       (funcall
+                        ebal-select-command-function
+                        "Choose command: "
+                        (mapcar (lambda (x) (symbol-name (car x)))
+                                ebal--command-alist)
+                        nil
+                        t))))
+                 (fnc (cdr (assq command ebal--command-alist))))
+            (when fnc
+              (funcall fnc)))
+        (message "Cannot locate ‘.cabal’ file."))
+    (message "Cannot local Cabal executable on this system.")))
 
 ;; Definitions of all supported commands.
 
