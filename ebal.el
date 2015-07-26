@@ -108,9 +108,7 @@ being used to compose command line."
 (defcustom ebal-global-option-alist nil
   "Alist that maps names of commands to their default options.
 
-Names of commands are symbols and options are strings.  If option
-string is missing for some command or it's NIL, this results in
-empty string.
+Names of commands are symbols and options are lists of strings.
 
 Note that this is global collection of options.  If you want to
 specify option to be used only with a specific command and in a
@@ -119,15 +117,12 @@ corresponding setup instructions."
   :tag "Global Options for Ebal Commands"
   :type '(alist :key-type symbol
                 :value-type
-                (choice (string :tag "Options")
-                        (const  :tag "No Options" nil))))
+                (repeat :tag "Options" string)))
 
 (defcustom ebal-project-option-alist nil
   "Alist that maps names of commands to their default options.
 
-Names of commands are symbols and options are strings.  If option
-string is missing for some command or it's NIL, this results in
-empty string.
+Names of commands are symbols and options are lists of strings.
 
 This variable represents user's preferences for current project.
 Value of the variable is read from \"*.ebal\" file that may be
@@ -136,8 +131,7 @@ contains \"*.cabal\" file)."
   :tag "Project Specific Options"
   :type '(alist :key-type symbol
                 :value-type
-                (choice (string :tag "Options")
-                        (const  :tag "No Options" nil))))
+                (repeat :tag "Options" string)))
 
 (defcustom ebal-sandboxing 'ask
   "This determines Ebal's policy towards sandboxing.
@@ -288,11 +282,13 @@ failure.  Returned path is guaranteed to have trailing slash."
   "Return time of last modification of file FILENAME."
   (nth 5 (file-attributes filename 'integer)))
 
-(defun ebal--cabal-available-p ()
-  "Return non-NIL if location of Cabal executable known, and NIL otherwise."
-  (or (executable-find "cabal")
-      (and ebal-cabal-executable
-           (f-file? ebal-cabal-executable))))
+(defun ebal--cabal-executable ()
+  "Return path to Cabal program is it's available, and NIL otherwise."
+  (cond ((executable-find "cabal")
+         "cabal")
+        ((and ebal-cabal-executable
+              (f-file? ebal-cabal-executable))
+         ebal-cabal-executable)))
 
 (defun ebal--sandbox-exists-p (dir)
   "Return non-NIL value if sandbox exists in DIR."
@@ -380,6 +376,26 @@ Returned value is T on success and NIL on failure (when no
 ;; Low-level construction of individual commands and their execution via
 ;; `compile'.
 
+(defun ebal--call-cabal (dir &rest args)
+  "Call Cabal as if from DIR with arguments ARGS.
+
+Arguments are quoted if necessary and NIL arguments are ignored.
+This uses `compile' internally."
+  (let ((default-directory dir)
+        (compilation-buffer-name-function
+         (lambda (_major-mode)
+           (format "*%s-cabal*"
+                   (downcase
+                    (replace-regexp-in-string
+                     "[[:space:]]"
+                     "-"
+                     ebal--project-name))))))
+    (compile
+     (mapconcat
+      #'shell-quote-argument
+      (remove nil (cons (ebal--cabal-executable) args))
+      " "))))
+
 (defun ebal--perform-command (command &optional arg)
   "Perform Cabal command COMMAND.
 
@@ -392,27 +408,15 @@ line.
 This is low-level operation, it doesn't run `ebal--prepare', thus
 it cannot be used on its own by user."
   (run-hooks ebal-before-command-hook)
-  (let ((default-directory ebal--last-directory)
-        (compilation-buffer-name-function
-         (lambda (_major-mode)
-           (format "*%s-cabal*"
-                   (downcase
-                    (replace-regexp-in-string
-                     "[[:space:]]"
-                     "-"
-                     ebal--project-name))))))
-    (compile
-     (mapconcat
-      #'identity
-      (remove
-       nil
-       (list
-        (shell-quote-argument (or ebal-cabal-executable "cabal"))
-        command
-        (cdr (assq ebal--actual-command ebal-global-option-alist))
-        (cdr (assq ebal--actual-command ebal-project-option-alist))
-        arg))
-      " ")))
+  (apply #'ebal--call-cabal
+         ebal--last-directory
+         command
+         (append
+          (cdr (assq ebal--actual-command
+                     ebal-global-option-alist))
+          (cdr (assq ebal--actual-command
+                     ebal-project-option-alist))
+          (when arg (list arg))))
   (run-hooks ebal-after-command-hook))
 
 (defmacro ebal--define-command (name kbd global-options doc-string &rest body)
@@ -421,7 +425,7 @@ it cannot be used on its own by user."
 KBD is keybinding (a character) that is used by
 `ebal-command-popup' function.
 
-GLOBAL-OPTIONS should be a string (or NIL) that contains all the
+GLOBAL-OPTIONS should be list of strings that contains all the
 command line options that should be always used with this
 command.
 
@@ -448,7 +452,7 @@ argument when actual command is called as dependency."
        (cl-pushnew (cons ,kbd ',name)
                    ebal-popup-key-alist
                    :key #'car)
-       (cl-pushnew (cons ',name ,global-options)
+       (cl-pushnew (cons ',name ',global-options)
                    ebal-global-option-alist
                    :key #'car))))
 
@@ -459,7 +463,7 @@ argument when actual command is called as dependency."
 When called interactively or when COMMAND is NIL, propose to
 choose command with `ebal-select-command-function'."
   (interactive)
-  (if (ebal--cabal-available-p)
+  (if (ebal--cabal-executable)
       (if (ebal--prepare)
           (let* ((command
                   (or command
@@ -493,7 +497,9 @@ choose command with `ebal-select-command-function'."
            (unless (string= target "default")
              (list target)))))
 
-(ebal--define-command configure ?c "--enable-tests --enable-benchmarks"
+(ebal--define-command configure ?c
+                      ("--enable-tests"
+                       "--enable-benchmarks")
   "Configure how package is built."
   (ebal--perform-command "configure"))
 
@@ -506,7 +512,9 @@ choose command with `ebal-select-command-function'."
   ;; TODO Improve this so specific benchmarks can be run.
   (ebal--perform-command "bench"))
 
-(ebal--define-command freeze ?f "--enable-tests --enable-benchmarks"
+(ebal--define-command freeze ?f
+                      ("--enable-tests"
+                       "--enable-benchmarks")
   "Calculate a valid set of dependencies and their exact
 versions.  If successful, save the result to the file
 \"cabal.config\"."
@@ -530,7 +538,9 @@ Requires the program `haddock'."
   (ebal--perform-command "haddock"))
 
 (ebal--define-command install ?i
-                      "--only-dependencies --enable-tests --enable-benchmarks"
+                      ("--only-dependencies"
+                       "--enable-tests"
+                       "--enable-benchmarks")
   "Install necessary packages."
   (if (and (not (ebal--sandbox-exists-p ebal--last-directory))
            (ebal--implicit-sandbox-p))
@@ -541,7 +551,9 @@ Requires the program `haddock'."
   "Check the package for common mistakes."
   (ebal--perform-command "check" nil))
 
-(ebal--define-command list ?l "--installed --simple-output"
+(ebal--define-command list ?l
+                      ("--installed"
+                       "--simple-output")
   "List packages matching a search string."
   (ebal--perform-command "list" nil))
 
