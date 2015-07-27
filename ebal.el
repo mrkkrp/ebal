@@ -376,8 +376,8 @@ Returned value is T on success and NIL on failure (when no
 ;; Low-level construction of individual commands and their execution via
 ;; `compile'.
 
-(defun ebal--call-cabal (dir &rest args)
-  "Call Cabal as if from DIR with arguments ARGS.
+(defun ebal--call-cabal (dir command &rest args)
+  "Call Cabal as if from DIR performing COMMAND with arguments ARGS.
 
 Arguments are quoted if necessary and NIL arguments are ignored.
 This uses `compile' internally."
@@ -392,8 +392,12 @@ This uses `compile' internally."
                      ebal--project-name))))))
     (compile
      (mapconcat
-      #'shell-quote-argument
-      (remove nil (cons (ebal--cabal-executable) args))
+      #'identity
+      (append
+       (list (shell-quote-argument (ebal--cabal-executable))
+             command)
+       (mapcar #'shell-quote-argument
+               (remove nil args)))
       " "))))
 
 (defun ebal--perform-command (command &optional arg)
