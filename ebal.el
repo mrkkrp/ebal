@@ -683,7 +683,125 @@ taken for compatibility and have no effect."
 
 ;; Wizard that helps to create new Cabal projects.
 
-;; TODO: UI — implement setup wizard in Emacs Lisp (`ebal-init')
+(defvar ebal--init-aborted nil
+  "This indicates whether current initialization has been aborted or not.")
+
+(defun ebal--init-query (prompt &optional collection require-match)
+  "Read users' input using `ebal-completing-read-function'.
+
+PROMPT is the prompt to show and COLLECTION represents valid
+choices.  If REQUIRE-MATCH is not NIL, don't let user input
+something different from items in COLLECTION.
+
+COLLECTION is allowed to be a string, in this case it's
+automatically wrapped to make it one-element list.
+
+If COLLECTION contains \"none\", and user selects it, interpret
+it as NIL.  If user aborts entering of the input, return NIL and
+most importantly set `ebal--init-aborted' to t.
+
+Finally, if COLLECTION is nil, plain `read-string' is used.
+
+If `ebal--init-aborted' is non-NIL, don't even try to read users'
+input, immediately return NIL.  Thus, before reading of series of
+inputs, `ebal--init-aborted' should be set to NIL."
+  (unless ebal--init-aborted
+    (let* ((collection
+            (if (listp collection)
+                collection
+              (list collection)))
+           (result
+            (if collection
+                (funcall ebal-completing-read-function
+                         prompt
+                         collection
+                         nil
+                         require-match)
+              (read-string prompt))))
+      (if result
+          (unless (and (string= result "none")
+                       (member result collection))
+            result)
+        (setq ebal--init-aborted t)
+        nil))))
+
+(defun ebal--form-arg (option value)
+  "Return argument that supplies OPTION with VALUE."
+  (when (and option value)
+    (format "%s=%s" option value)))
+
+(defun ebal-init ()
+  "Create a .cabal, Setup.hs, and optionally a LICENSE file interactively."
+  (interactive)
+  (if (ebal--prepare)
+      (message "The directory is already Cabalized, it seems")
+    (run-hooks ebal-before-init-hook)
+    (setq ebal--init-aborted nil)
+    (let* ((ebal--project-name
+            (ebal--init-query "Package name: " "cabal"))
+           (ebal--project-version
+            (ebal--init-query "Initial version: " "0.1.0"))
+           (license
+            (ebal--init-query
+             "License: "
+             '("none" "GPL-2" "GPL-3" "LGPL-2.1" "LGPL-3" "AGPL-3"
+               "BSD2" "BSD3" "MIT" "ISC" "MPL-2.0" "Apache-2.0"
+               "PublicDomain" "AllRightsReserved")
+             t))
+           (author (ebal--init-query "Author name: " user-full-name))
+           (email (ebal--init-query "Maintainer email: " user-mail-address))
+           (homepage (ebal--init-query "Project homepage URL: "))
+           (synopsis (ebal--init-query "Synopsis: "))
+           (category
+            (ebal--init-query
+             "Category: "
+             '("none" "Codec" "Concurrency" "Control" "Data" "Database"
+               "Development" "Distribution" "Game" "Graphics" "Language"
+               "Math" "Network" "Sound" "System" "Testing" "Text" "Web")
+             t))
+           (type
+            (ebal--init-query
+             "What does the package build: "
+             '("Library" "Executable")
+             t))
+           (main-is
+            (when (string= type "Executable")
+              (ebal--init-query
+               "What is the main module of the executable: "
+               '("Main.hs" "Main.lhs"))))
+           (language
+            (ebal--init-query
+             "What base language is the package written in: "
+             '("Haskell2010" "Haskell98")
+             t))
+           (source-dir
+            (ebal--init-query
+             "Source directory: "
+             '("src" "none")))
+           (include-comments
+            (y-or-n-p "Include documentation on what each field means? ")))
+      (unless ebal--init-aborted
+        (ebal--call-cabal
+         default-directory
+         "init"
+         "--non-interactive"
+         (ebal--form-arg "--package-name" ebal--project-name)
+         (ebal--form-arg "--version"      ebal--project-version)
+         (ebal--form-arg "--license"      license)
+         (ebal--form-arg "--author"       author)
+         (ebal--form-arg "--email"        email)
+         (ebal--form-arg "--homepage"     homepage)
+         (ebal--form-arg "--synopsis"     synopsis)
+         (ebal--form-arg "--category"     category)
+         (cl-case type
+           ("Library"    "--is-library")
+           ("Executable" "--is-executable"))
+         (ebal--form-arg "--main-is"      main-is)
+         (ebal--form-arg "--language"     language)
+         (ebal--form-arg "--source-dir"   source-dir)
+         (unless include-comments
+           "--no-comments"))))
+    (run-hooks ebal-after-init-hook)))
 
 (provide 'ebal)
 
