@@ -734,6 +734,7 @@ inputs, `ebal--init-aborted' should be set to NIL."
   (when (and option value)
     (format "%s=%s" option value)))
 
+;;;###autoload
 (defun ebal-init ()
   "Create a .cabal, Setup.hs, and optionally a LICENSE file interactively."
   (interactive)
