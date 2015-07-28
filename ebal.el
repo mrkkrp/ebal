@@ -92,7 +92,7 @@ This is usually set by `ebal--parse-cabal-file'.")
 This is usually set by `ebal--parse-cabal-file'.")
 
 (defcustom ebal-cabal-executable nil
-  "Path to cabal executable.
+  "Path to Cabal executable.
 
 If it's not NIL, this value is used in invocation of Cabal
 commands instead of standard \"cabal\" string.  Set this variable
@@ -127,7 +127,11 @@ Names of commands are symbols and options are lists of strings.
 This variable represents user's preferences for current project.
 Value of the variable is read from \"*.ebal\" file that may be
 present in project's root directory (the same directory that
-contains \"*.cabal\" file)."
+contains \"*.cabal\" file).
+
+Don't set this variable manually, instead create
+\"project-name.cabal\" file and put desired value (a Lisp Object)
+into it."
   :tag "Project Specific Options"
   :type '(alist :key-type symbol
                 :value-type
