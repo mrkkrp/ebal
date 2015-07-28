@@ -130,8 +130,8 @@ present in project's root directory (the same directory that
 contains \"*.cabal\" file).
 
 Don't set this variable manually, instead create
-\"project-name.cabal\" file and put desired value (a Lisp Object)
-into it."
+\"project-name.ebal\" file and put desired value (a Lisp Object)
+into it unquoted."
   :tag "Project Specific Options"
   :type '(alist :key-type symbol
                 :value-type
@@ -173,8 +173,8 @@ This is what `ebal-execute' uses.  Default is Ebal custom popup
 buffer, but you can use IDO-powered variant if you like or plain
 `ebal-command-completing-read'.
 
-The function is called with no arguments, it should return symbol
-specifying chosen command."
+The function is called with arguments like those that
+`completing-read' takes."
   :tag "How to Select Command"
   :type '(radio (function-item ebal-command-completing-read)
                 (function-item ebal-command-ido)
