@@ -1,6 +1,7 @@
 # Ebal
 
 [![License GPL 3](https://img.shields.io/badge/license-GPL_3-green.svg)](http://www.gnu.org/licenses/gpl-3.0.txt)
+[![MELPA](http://melpa.org/packages/ebal-badge.svg)](http://melpa.org/#/ebal)
 [![Build Status](https://travis-ci.org/mrkkrp/ebal.svg?branch=master)](https://travis-ci.org/mrkkrp/ebal)
 
 This is Emacs interface to Cabal. Currently, it provides fast and easy
@@ -36,6 +37,9 @@ this:
 ```emacs-lisp
 (require 'ebal)
 ```
+
+It's available via MELPA, so you can just <kbd>M-x package-install RET
+ebal RET</kbd>.
 
 ## Usage
 
