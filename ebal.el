@@ -25,7 +25,25 @@
 
 ;;; Commentary:
 
-;; This is Emacs interface to Cabal that eliminates boilerplate.
+;; This is Emacs interface to Cabal. Currently, it provides fast and easy
+;; access to most Cabal commands:
+;;
+;; * cabal init
+;; * cabal build
+;; * cabal configure
+;; * cabal sdist
+;; * cabal bench
+;; * cabal freeze
+;; * cabal fetch
+;; * cabal install
+;; * cabal check
+;; * cabal list
+;; * cabal sandbox init
+;; * cabal info
+;; * cabal test
+;; * cabal update
+;; * cabal sandbox delete
+;; * cabal clean
 
 ;;; Code:
 
