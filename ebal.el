@@ -78,6 +78,12 @@ This variable is mainly useful when you want to add
 ‘ebal-before-command-hook’ or ‘ebal-after-command-hook’ and you
 need to test which command is currently performed.")
 
+(defvar ebal--pre-commands nil
+  "List of command lines to execute before next Cabal command.")
+
+(defvar ebal--post-commands nil
+  "List of command lines to execute after next Cabal command.")
+
 (defvar ebal--last-directory nil
   "Path to project's directory last time `ebal--prepare' was called.
 
@@ -108,6 +114,9 @@ This is usually set by `ebal--parse-cabal-file'.")
   "List of build targets (strings) extracted from \"*.cabal\" file.
 
 This is usually set by `ebal--parse-cabal-file'.")
+
+(defvar ebal--init-aborted nil
+  "Whether current initialization has been aborted or not.")
 
 (defcustom ebal-cabal-executable nil
   "Path to Cabal executable.
@@ -401,6 +410,39 @@ Returned value is T on success and NIL on failure (when no
 ;; Low-level construction of individual commands and their execution via
 ;; `compile'.
 
+(defun ebal--format-command (command &rest args)
+  "Generate textual representation of command line.
+
+COMMAND is the name of command and ARGS are arguments.  Result is
+expected to be used as argument of `compile'."
+  (mapconcat
+   #'identity
+   (append
+    (list (shell-quote-argument (ebal--cabal-executable))
+          command)
+    (mapcar #'shell-quote-argument
+            (remove nil args)))
+   " "))
+
+(defun ebal--register-command (kind command &rest args)
+  "Register command to run before next call to Cabal.
+
+KIND tells when to perform the command, meaningful values are:
+
+before — execute the command before next Cabal command;
+
+after — execute the command after next Cabal command.
+
+All other values of KIND have effect of ‘before’.
+
+COMMAND is the name of command and ARGS are arguments.  Return
+the formatted command."
+  (let ((cmd (apply #'ebal--format-command command args)))
+    (if (eq kind 'after)
+        (push cmd ebal--post-commands)
+      (push cmd ebal--pre-commands))
+    cmd))
+
 (defun ebal--call-cabal (dir command &rest args)
   "Call Cabal as if from DIR performing COMMAND with arguments ARGS.
 
@@ -419,11 +461,13 @@ This uses `compile' internally."
      (mapconcat
       #'identity
       (append
-       (list (shell-quote-argument (ebal--cabal-executable))
-             command)
-       (mapcar #'shell-quote-argument
-               (remove nil args)))
-      " "))))
+       (reverse ebal--pre-commands)
+       (list (apply #'ebal--format-command command args))
+       (reverse ebal--post-commands))
+      " && "))
+    (setq ebal--pre-commands  nil
+          ebal--post-commands nil)
+    nil))
 
 (defun ebal--perform-command (command &optional arg)
   "Perform Cabal command COMMAND.
@@ -571,10 +615,10 @@ Requires the program `haddock'."
                        "--enable-tests"
                        "--enable-benchmarks")
   "Install necessary packages."
-  (if (and (not (ebal--sandbox-exists-p ebal--last-directory))
-           (ebal--implicit-sandbox-p))
-      (funcall (cdr (assq 'sandbox-init ebal--command-alist)))
-    (ebal--perform-command "install")))
+  (when (and (not (ebal--sandbox-exists-p ebal--last-directory))
+             (ebal--implicit-sandbox-p))
+    (ebal--register-command 'before "sandbox init"))
+  (ebal--perform-command "install"))
 
 (ebal--define-command check ?k nil
   "Check the package for common mistakes."
@@ -708,9 +752,6 @@ taken for compatibility and have no effect."
 
 ;; Wizard that helps to create new Cabal projects.
 
-(defvar ebal--init-aborted nil
-  "This indicates whether current initialization has been aborted or not.")
-
 (defun ebal--init-query (prompt &optional collection require-match)
   "Read users' input using `ebal-completing-read-function'.
 
@@ -807,6 +848,8 @@ inputs, `ebal--init-aborted' should be set to NIL."
            (include-comments
             (y-or-n-p "Include documentation on what each field means? ")))
       (unless ebal--init-aborted
+        (when (ebal--implicit-sandbox-p)
+          (ebal--register-command 'after "sandbox init"))
         (ebal--call-cabal
          default-directory
          "init"
