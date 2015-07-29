@@ -229,12 +229,14 @@ This is used by `ebal-command-popup'."
 (defcustom ebal-before-command-hook nil
   "Hook to run before execution of particular command.
 
-You can check name of the command in `ebal--actual-command'."
+Name of the command is available in `ebal--actual-command'."
   :tag "Before Command Hook"
   :type 'hook)
 
 (defcustom ebal-after-command-hook nil
-  "Hook to run after execution of particular command."
+  "Hook to run after execution of particular command.
+
+Name of the command is available in `ebal--actual-command'."
   :tag "After Command Hook"
   :type 'hook)
 

@@ -227,7 +227,7 @@ ebal-before-command-hook ⇒ nil
 
 Hook to run before execution of particular command.
 
-You can check name of the command in `ebal--actual-command`.
+Name of the command is available in `ebal--actual-command`.
 
 ----
 
@@ -236,6 +236,8 @@ ebal-after-command-hook ⇒ nil
 ```
 
 Hook to run after execution of particular command.
+
+Name of the command is available in `ebal--actual-command`.
 
 ## License
 
