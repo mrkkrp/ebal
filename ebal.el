@@ -47,7 +47,6 @@
 
 ;;; Code:
 
-(require 'button)
 (require 'cl-lib)
 (require 'compile)
 (require 'f)
@@ -683,7 +682,7 @@ location of the database) can be modified this way."
 (defun ebal-command-popup
     (prompt collection &optional predicate
             _require-match _initial-input _hist _def _inherit-input-method)
-  "Show a popup displaying PROMPT and COLLECTION of buttons.
+  "Show a popup displaying PROMPT and COLLECTION of commands.
 
 PREDICATE is used to filter COLLECTION.  Other arguments are
 taken for compatibility and have no effect."
