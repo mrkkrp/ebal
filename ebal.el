@@ -383,11 +383,12 @@ Returned value is T on success and NIL on failure (when no
                               project-directory)))
             (progn
               ;; We are in different directory (or it's the first
-              ;; invocation).  This means we should unconditionally parse
+              ;; invocation). This means we should unconditionally parse
               ;; everything without checking of date of last modification.
               (ebal--parse-cabal-file cabal-file)
               (setq ebal--cabal-mod-time (ebal--mod-time cabal-file))
-              (when ebal-file
+              (if (not ebal-file)
+                  (setq ebal-project-option-alist nil)
                 (ebal--parse-ebal-file ebal-file)
                 (setq ebal--ebal-mod-time (ebal--mod-time ebal-file)))
               ;; Set last directory for future checks.
