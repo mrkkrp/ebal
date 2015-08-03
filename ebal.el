@@ -264,7 +264,7 @@ This is used by `ebal--prepare'."
     ;; project name
     (setq ebal--project-name
           (car (ebal--all-matches
-                "^[[:blank:]]*name:[[:blank:]]+\\(\\w+\\)")))
+                "^[[:blank:]]*name:[[:blank:]]+\\([[:word:]-]+\\)")))
     ;; project version
     (setq ebal--project-version
           (car (ebal--all-matches
@@ -280,13 +280,13 @@ This is used by `ebal--prepare'."
       ;; executable
       (mapcar (lambda (x) (format "exe:%s" x))
               (ebal--all-matches
-               "^[[:blank:]]*executable[[:blank:]]+\\(\\w+\\)"))
+               "^[[:blank:]]*executable[[:blank:]]+\\([[:word:]-]+\\)"))
       ;; test suites
       (ebal--all-matches
-       "^[[:blank:]]*test-suite[[:blank:]]+\\(\\w+\\)")
+       "^[[:blank:]]*test-suite[[:blank:]]+\\([[:word:]-]+\\)")
       ;; benchmarks
       (ebal--all-matches
-       "^[[:blank:]]*benchmark[[:blank:]]+\\(\\w+\\)")))))
+       "^[[:blank:]]*benchmark[[:blank:]]+\\([[:word:]-]+\\)")))))
 
 (defun ebal--parse-ebal-file (filename)
   "Parse \"*.ebal\" file with name FILENAME and set some variables.
