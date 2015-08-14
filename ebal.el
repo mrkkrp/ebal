@@ -327,7 +327,8 @@ failure.  Returned path is guaranteed to have trailing slash."
 
 (defun ebal--sandbox-exists-p (dir)
   "Return non-NIL value if sandbox exists in DIR."
-  (f-dir? (f-expand ".cabal-sandbox" dir)))
+  (or (f-file? (f-expand "cabal.config"         dir))
+      (f-file? (f-expand "cabal.sandbox.config" dir))))
 
 (defun ebal--implicit-sandbox-p ()
   "Return non-NIL value if sandbox should be implicitly created."
