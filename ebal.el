@@ -55,9 +55,10 @@
 
 (defgroup ebal nil
   "Emacs interface to Cabal."
-  :group 'programming
-  :tag "Ebal"
-  :prefix "ebal-")
+  :group  'programming
+  :tag    "Ebal"
+  :prefix "ebal-"
+  :link   '(url-link :tag "GitHub" "https://github.com/mrkkrp/ebal"))
 
 (defvar ebal--command-alist nil
   "Alist that maps names of commands to functions that perform them.
