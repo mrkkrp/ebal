@@ -60,6 +60,22 @@
   :prefix "ebal-"
   :link   '(url-link :tag "GitHub" "https://github.com/mrkkrp/ebal"))
 
+(defface ebal-project-name
+  '((t (:inherit font-lock-function-name-face)))
+  "Face used to display name of current project.")
+
+(defface ebal-project-version
+  '((t (:inherit font-lock-doc-face)))
+  "Face used to display version of current project.")
+
+(defface ebal-header
+  '((t (:inherit bold)))
+  "Face used to display “Commands:” header.")
+
+(defface ebal-key
+  '((t (:inherit font-lock-keyword-face)))
+  "Face used to display key bindings for commands.")
+
 (defvar ebal--command-alist nil
   "Alist that maps names of commands to functions that perform them.
 
@@ -733,17 +749,16 @@ taken for compatibility and have no effect."
            ;; print stuff from collection
            (insert
             (propertize (or ebal--project-name "Unknown")
-                        'face 'font-lock-function-name-face))
+                        'face 'ebal-project-name))
            (when ebal--project-version
              (insert
               (propertize (format " %s" ebal--project-version)
-                          'face 'font-lock-doc-face)))
+                          'face 'ebal-project-version)))
            (insert "\n\n")
-           (insert (propertize "Commands:\n" 'face 'bold))
+           (insert (propertize "Commands:\n" 'face 'ebal-header))
            (dolist (item col)
              (cl-destructuring-bind (key . command) item
-               (insert (propertize (string key)
-                                   'face 'font-lock-keyword-face))
+               (insert (propertize (string key) 'face 'ebal-key))
                (insert (format " %s" command)))
              (setq i (1+ i))
              (let ((j (mod i 4)))
