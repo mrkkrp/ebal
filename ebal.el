@@ -4,7 +4,7 @@
 ;;
 ;; Author: Mark Karpov <markkarpov@openmailbox.org>
 ;; URL: https://github.com/mrkkrp/ebal
-;; Version: 0.1.1
+;; Version: 0.1.2
 ;; Package-Requires: ((emacs "24.4") (f "0.18.0") (ido-completing-read+ "3.6"))
 ;; Keywords: convenience, cabal, haskell
 ;;
