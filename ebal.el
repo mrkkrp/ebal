@@ -1,4 +1,4 @@
-;;; ebal.el --- Emacs interface to Cabal -*- lexical-binding: t; -*-
+;;; ebal.el --- Emacs interface to Cabal and Stack -*- lexical-binding: t; -*-
 ;;
 ;; Copyright © 2015 Mark Karpov <markkarpov@openmailbox.org>
 ;;
@@ -25,25 +25,27 @@
 
 ;;; Commentary:
 
-;; This is Emacs interface to Cabal. Currently, it provides fast and easy
-;; access to most Cabal commands:
+;; This is Emacs interface to Cabal and Stack. Currently, it provides fast
+;; and easy access to most Cabal commands († — commands available in Stack
+;; mode):
 ;;
-;; * cabal init
+;; * cabal init †
 ;; * cabal build
 ;; * cabal configure
-;; * cabal sdist
-;; * cabal bench
+;; * cabal sdist †
+;; * cabal bench †
 ;; * cabal freeze
 ;; * cabal fetch
-;; * cabal install
+;; * cabal haddock †
+;; * cabal install †
 ;; * cabal check
 ;; * cabal list
 ;; * cabal sandbox init
 ;; * cabal info
-;; * cabal test
-;; * cabal update
+;; * cabal test †
+;; * cabal update †
 ;; * cabal sandbox delete
-;; * cabal clean
+;; * cabal clean †
 
 ;;; Code:
 
@@ -51,10 +53,12 @@
 (require 'compile)
 (require 'f)
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Settings & Variables
 
 (defgroup ebal nil
-  "Emacs interface to Cabal."
+  "Emacs interface to Cabal and Stack."
   :group  'programming
   :tag    "Ebal"
   :prefix "ebal-"
@@ -76,7 +80,14 @@
   '((t (:inherit font-lock-keyword-face)))
   "Face used to display key bindings for commands.")
 
-(defvar ebal--command-alist nil
+(defvar ebal--cabal-command-alist nil
+  "Alist that maps names of commands to functions that perform them.
+
+This variable is modified by `ebal--define-command' when some
+command is defined.  Do not modify this manually, unless you know
+what you're doing.")
+
+(defvar ebal--stack-command-alist nil
   "Alist that maps names of commands to functions that perform them.
 
 This variable is modified by `ebal--define-command' when some
@@ -95,10 +106,10 @@ This variable is mainly useful when you want to add
 need to test which command is currently performed.")
 
 (defvar ebal--pre-commands nil
-  "List of command lines to execute before next Cabal command.")
+  "List of command lines to execute before next command.")
 
 (defvar ebal--post-commands nil
-  "List of command lines to execute after next Cabal command.")
+  "List of command lines to execute after next command.")
 
 (defvar ebal--last-directory nil
   "Path to project's directory last time `ebal--prepare' was called.
@@ -134,6 +145,21 @@ This is usually set by `ebal--parse-cabal-file'.")
 (defvar ebal--init-aborted nil
   "Whether current initialization has been aborted or not.")
 
+(defcustom ebal-operation-mode 'cabal
+  "Mode of operation for Ebal package.
+
+The following values are recognized:
+
+  cabal — Ebal works as interface for Cabal
+
+  stack — Ebal works as interface for Stack
+
+All other values of this variable produce the same effect as
+`cabal'."
+  :tag "Mode of Operation"
+  :type '(choice (const :tag "Interface to Cabal" cabal)
+                 (const :tag "Interface to Stack" stack)))
+
 (defcustom ebal-cabal-executable nil
   "Path to Cabal executable.
 
@@ -144,6 +170,19 @@ if your Cabal is in a strange place where OS cannot find it.
 Note that the path is quoted with `shell-quote-argument' before
 being used to compose command line."
   :tag "Path to Cabal Executable"
+  :type '(choice (file :must-match t)
+                 (const :tag "Use Default" nil)))
+
+(defcustom ebal-stack-executable nil
+  "Path to Stack executable.
+
+If it's not NIL, this value is used in invocation of Stack
+commands instead of standard \"stack\" string.  Set this variable
+if your Stack is in a strange place where OS cannot find it.
+
+Note that the path is quoted with `shell-quote-argument' before
+being used to compose command line."
+  :tag "Path to Stack Executable"
   :type '(choice (file :must-match t)
                  (const :tag "Use Default" nil)))
 
@@ -183,20 +222,21 @@ into it unquoted."
 (defcustom ebal-sandboxing 'ask
   "This determines Ebal's policy towards sandboxing.
 
-The following values are recognized:
+The following values are recognized (Cabal mode only):
 
-NIL — don't create sandboxes unless user explicitly runs command
-to create one.
+  NIL — don't create sandboxes unless user explicitly runs
+  command to create one.
 
-ask — ask if user wants to create a sandbox (so it's harder to
-forget to create it), this is often preferable because most
-Haskell developers want sandboxes everywhere nowadays (default).
+  ask — ask if user wants to create a sandbox (so it's harder to
+  forget to create it), this is often preferable because most
+  Haskell developers want sandboxes everywhere
+  nowadays (default).
 
-always — create sandboxes silently when they are missing and they
-should be created.  With this option every your project is
-sandboxed without any effort on your side.
+  always — create sandboxes silently when they are missing and
+  they should be created.  With this option every your project is
+  sandboxed without any effort on your side.
 
-All other values of this variabe produce the same effect as
+All other values of this variable produce the same effect as
 `always'."
   :tag "Sandboxing Policy"
   :type '(choice (const :tag "User creates sandboxes manually" nil)
@@ -256,7 +296,9 @@ Name of the command is available in `ebal--actual-command'."
   :tag "After Command Hook"
   :type 'hook)
 
-;; Various utilities.
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Various utilities
 
 (defun ebal--all-matches (regexp)
   "Return list of all stirngs matching REGEXP in current buffer."
@@ -271,9 +313,9 @@ Name of the command is available in `ebal--actual-command'."
 
 The following variables are set:
 
-* `ebal--project-name'
-* `ebal--project-version'
-* `ebal--project-targets'
+  `ebal--project-name'
+  `ebal--project-version'
+  `ebal--project-targets'
 
 This is used by `ebal--prepare'."
   (with-temp-buffer
@@ -310,7 +352,7 @@ This is used by `ebal--prepare'."
 
 The following variable is set:
 
-* `ebal--project-option-alist'
+  `ebal--project-option-alist'
 
 This is used by `ebal--prepare.'"
   (setq ebal-project-option-alist
@@ -330,17 +372,29 @@ failure.  Returned path is guaranteed to have trailing slash."
     (when dir
       (f-slash dir))))
 
+(defmacro ebal--mode-alts (cabal stack)
+  "Execute CABAL or STACK expression according to mode of operation.
+
+`ebal-operation-mode' controls current mode."
+  (declare (indent defun))
+  `(if (eq ebal-operation-mode 'stack)
+       ,stack
+     ,cabal))
+
 (defun ebal--mod-time (filename)
   "Return time of last modification of file FILENAME."
   (nth 5 (file-attributes filename 'integer)))
 
-(defun ebal--cabal-executable ()
-  "Return path to Cabal program is it's available, and NIL otherwise."
-  (cond ((executable-find "cabal")
-         "cabal")
-        ((and ebal-cabal-executable
-              (f-file? ebal-cabal-executable))
-         ebal-cabal-executable)))
+(defun ebal--target-executable ()
+  "Return path to target program is it's available, and NIL otherwise."
+  (cl-destructuring-bind (default . custom)
+      (ebal--mode-alts
+        (cons "cabal" ebal-cabal-executable)
+        (cons "stack" ebal-stack-executable))
+    (cond ((executable-find default)
+           default)
+          ((and custom (f-file? custom))
+           custom))))
 
 (defun ebal--sandbox-exists-p (dir)
   "Return non-NIL value if sandbox exists in DIR."
@@ -363,7 +417,9 @@ This uses variation \"cabal list\" internally."
                      (current-buffer))
       (ebal--all-matches "^\\(.+\\)[[:blank:]]"))))
 
-;; Preparation.
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Preparation
 
 (defun ebal--prepare ()
   "Locate, read, and parse configuration files and set various variables.
@@ -372,9 +428,9 @@ This commands searches for first \"*.cabal\" files traversing
 directories upwards beginning with `default-directory'.  When
 Cabal files is found, the following variables are set:
 
-* `ebal--project-name'
-* `ebal--project-version'
-* `ebal--project-targets'
+  `ebal--project-name'
+  `ebal--project-version'
+  `ebal--project-targets'
 
 If \"*.ebal\" file is present, `ebal--project-option-alist' is
 set.
@@ -427,8 +483,9 @@ Returned value is T on success and NIL on failure (when no
             (setq ebal--ebal-mod-time (ebal--mod-time ebal-file)))
           t)))))
 
-;; Low-level construction of individual commands and their execution via
-;; `compile'.
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Low-level construction of individual commands
 
 (defun ebal--format-command (command &rest args)
   "Generate textual representation of command line.
@@ -438,20 +495,20 @@ expected to be used as argument of `compile'."
   (mapconcat
    #'identity
    (append
-    (list (shell-quote-argument (ebal--cabal-executable))
+    (list (shell-quote-argument (ebal--target-executable))
           command)
     (mapcar #'shell-quote-argument
             (remove nil args)))
    " "))
 
 (defun ebal--register-command (kind command &rest args)
-  "Register command to run before next call to Cabal.
+  "Register command to run before next call of target program.
 
 KIND tells when to perform the command, meaningful values are:
 
-before — execute the command before next Cabal command;
+  before — execute the command before next command;
 
-after — execute the command after next Cabal command.
+  after — execute the command after next command.
 
 All other values of KIND have effect of ‘before’.
 
@@ -463,20 +520,21 @@ the formatted command."
       (push cmd ebal--pre-commands))
     cmd))
 
-(defun ebal--call-cabal (dir command &rest args)
-  "Call Cabal as if from DIR performing COMMAND with arguments ARGS.
+(defun ebal--call-target (dir command &rest args)
+  "Call target as if from DIR performing COMMAND with arguments ARGS.
 
 Arguments are quoted if necessary and NIL arguments are ignored.
 This uses `compile' internally."
   (let ((default-directory dir)
         (compilation-buffer-name-function
          (lambda (_major-mode)
-           (format "*%s-cabal*"
+           (format "*%s-%s*"
                    (downcase
                     (replace-regexp-in-string
                      "[[:space:]]"
                      "-"
-                     ebal--project-name))))))
+                     ebal--project-name))
+                   (ebal--mode-alts "cabal" "stack")))))
     (compile
      (mapconcat
       #'identity
@@ -490,7 +548,7 @@ This uses `compile' internally."
     nil))
 
 (defun ebal--perform-command (command &optional arg)
-  "Perform Cabal command COMMAND.
+  "Perform target command COMMAND.
 
 This function should be called in “prepared” environment, where
 `ebal--actual-command' is bound to name of executing command.
@@ -501,7 +559,7 @@ line.
 This is low-level operation, it doesn't run `ebal--prepare', thus
 it cannot be used on its own by user."
   (run-hooks ebal-before-command-hook)
-  (apply #'ebal--call-cabal
+  (apply #'ebal--call-target
          ebal--last-directory
          command
          (append
@@ -512,11 +570,19 @@ it cannot be used on its own by user."
           (when arg (list arg))))
   (run-hooks ebal-after-command-hook))
 
-(defmacro ebal--define-command (name kbd global-options doc-string &rest body)
+(defmacro ebal--define-command (name kbd m global-options doc-string &rest body)
   "Define new Ebal command named NAME.
 
 KBD is keybinding (a character) that is used by
 `ebal-command-popup' function.
+
+M specifies modes in which the command will be available:
+
+  cabal — only in Cabal mode
+
+  stack — only in Stack mode
+
+  both — in both Cabal and Stack mode
 
 GLOBAL-OPTIONS should be list of strings that contains all the
 command line options that should be always used with this
@@ -530,7 +596,7 @@ command inside of BODY.  Also, inside the BODY, `non-direct-call'
 is bound to truly value if this command is called directly by
 user.  Some commands can check ARG variable that's bound to
 argument when actual command is called as dependency."
-  (declare (indent 3))
+  (declare (indent 4))
   (let ((function-name
          (intern (concat "ebal--command-"
                          (symbol-name name)))))
@@ -540,8 +606,12 @@ argument when actual command is called as dependency."
          (ignore arg)
          (let ((ebal--actual-command ',name))
            ,@body))
-       (push (cons ',name (function ,function-name))
-             ebal--command-alist)
+       (when (memq ',m '(cabal both))
+         (push (cons ',name (function ,function-name))
+               ebal--cabal-command-alist))
+       (when (memq ',m '(stack both))
+         (push (cons ',name (function ,function-name))
+               ebal--stack-command-alist))
        (cl-pushnew (cons ,kbd ',name)
                    ebal-popup-key-alist
                    :key #'car)
@@ -556,19 +626,23 @@ argument when actual command is called as dependency."
 When called interactively or when COMMAND is NIL, propose to
 choose command with `ebal-select-command-function'."
   (interactive)
-  (if (ebal--cabal-executable)
+  (if (ebal--target-executable)
       (if (ebal--prepare)
-          (let* ((command
+          (let* ((command-alist
+                  (ebal--mode-alts
+                    ebal--cabal-command-alist
+                    ebal--stack-command-alist))
+                 (command
                   (or command
                       (intern
                        (funcall
                         ebal-select-command-function
                         "Choose command: "
                         (mapcar (lambda (x) (symbol-name (car x)))
-                                ebal--command-alist)
+                                command-alist)
                         nil
                         t))))
-                 (fnc (cdr (assq command ebal--command-alist))))
+                 (fnc (cdr (assq command command-alist))))
             (when fnc
               (funcall fnc)))
         (message "Cannot locate ‘.cabal’ file."))
@@ -576,7 +650,7 @@ choose command with `ebal-select-command-function'."
 
 ;; Definitions of all supported commands.
 
-(ebal--define-command build ?b nil
+(ebal--define-command build ?b both nil
   "Build Cabal target ARG."
   (let ((target
          (or arg
@@ -590,22 +664,22 @@ choose command with `ebal-select-command-function'."
            (unless (string= target "default")
              (list target)))))
 
-(ebal--define-command configure ?c
+(ebal--define-command configure ?c cabal
                       ("--enable-tests"
                        "--enable-benchmarks")
   "Configure how package is built."
   (ebal--perform-command "configure"))
 
-(ebal--define-command sdist ?d nil
+(ebal--define-command sdist ?d both nil
   "Generate a source distribution file (.tag.gz)."
   (ebal--perform-command "sdist"))
 
-(ebal--define-command bench ?e nil
+(ebal--define-command bench ?e both nil
   "Run all/specific benchmarks."
   ;; TODO Improve this so specific benchmarks can be run.
   (ebal--perform-command "bench"))
 
-(ebal--define-command freeze ?f
+(ebal--define-command freeze ?f cabal
                       ("--enable-tests"
                        "--enable-benchmarks")
   "Calculate a valid set of dependencies and their exact
@@ -613,7 +687,7 @@ versions.  If successful, save the result to the file
 \"cabal.config\"."
   (ebal--perform-command "freeze"))
 
-(ebal--define-command fetch ?g nil
+(ebal--define-command fetch ?g cabal nil
   "Download packages for later installation."
   (let ((packages
          (or arg
@@ -624,13 +698,13 @@ versions.  If successful, save the result to the file
                       t))))
     (ebal--perform-command "fetch" packages)))
 
-(ebal--define-command haddock ?h nil
+(ebal--define-command haddock ?h both nil
   "Generate Haddock HTML documentation.
 
 Requires the program `haddock'."
   (ebal--perform-command "haddock"))
 
-(ebal--define-command install ?i
+(ebal--define-command install ?i both
                       ("--only-dependencies"
                        "--enable-tests"
                        "--enable-benchmarks")
@@ -640,17 +714,17 @@ Requires the program `haddock'."
     (ebal--register-command 'before "sandbox init"))
   (ebal--perform-command "install"))
 
-(ebal--define-command check ?k nil
+(ebal--define-command check ?k cabal nil
   "Check the package for common mistakes."
   (ebal--perform-command "check" nil))
 
-(ebal--define-command list ?l
+(ebal--define-command list ?l cabal
                       ("--installed"
                        "--simple-output")
   "List packages matching a search string."
   (ebal--perform-command "list" nil))
 
-(ebal--define-command sandbox-init ?n nil
+(ebal--define-command sandbox-init ?n cabal nil
   "Initialize a sandbox in the current directory.  An existing
 package database will not be modified, but settings (such as the
 location of the database) can be modified this way."
@@ -658,7 +732,7 @@ location of the database) can be modified this way."
       (message "Sandbox already exists")
     (ebal--perform-command "sandbox init")))
 
-(ebal--define-command info ?o nil
+(ebal--define-command info ?o cabal nil
   "Display detailed information about a particular package."
   (let ((package
          (or arg
@@ -669,23 +743,23 @@ location of the database) can be modified this way."
                       t))))
     (ebal--perform-command "info" package)))
 
-(ebal--define-command test ?t nil
+(ebal--define-command test ?t both nil
   "Run all/specific tests in the test suite."
   ;; TODO allow to run specific test components
   (ebal--perform-command "test"))
 
-(ebal--define-command update ?u nil
+(ebal--define-command update ?u both nil
   "Update list of known packages."
   (ebal--perform-command "update"))
 
-(ebal--define-command sandbox-delete ?x nil
+(ebal--define-command sandbox-delete ?x cabal nil
   "Remove the sandbox deleting all the packages installed inside."
   (if (ebal--sandbox-exists-p ebal--last-directory)
       (when (yes-or-no-p "Really delete the sandbox and all packages?")
         (ebal--perform-command "sandbox delete"))
     (message "There is no sandbox to delete")))
 
-(ebal--define-command clean ?z nil
+(ebal--define-command clean ?z both nil
   "Clean up after a build."
   (ebal--perform-command "clean"))
 
@@ -723,7 +797,10 @@ taken for compatibility and have no effect."
                        5))
          (i 0))
     (when collection
-      (let ((buffer (get-buffer-create "*Cabal Commands*")))
+      (let ((buffer (get-buffer-create
+                     (ebal--mode-alts
+                       "*Cabal Commands*"
+                       "*Stack Commands*"))))
         (with-current-buffer buffer
           (with-current-buffer-window
            ;; buffer or name
@@ -869,7 +946,7 @@ inputs, `ebal--init-aborted' should be set to NIL."
       (unless ebal--init-aborted
         (when (ebal--implicit-sandbox-p)
           (ebal--register-command 'after "sandbox init"))
-        (ebal--call-cabal
+        (ebal--call-target
          default-directory
          "init"
          "--non-interactive"
