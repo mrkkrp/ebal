@@ -9,22 +9,25 @@ easy access to most commands († — commands available in Stack mode):
 
 * <kbd>M-x ebal-init</kbd> `cabal init` (useful even in Stack mode)
 * <kbd>M-x ebal-execute</kbd> — opens a popup menu with the following:
-  * <kbd>b</kbd> `cabal build` †
-  * <kbd>c</kbd> `cabal configure`
-  * <kbd>d</kbd> `cabal sdist` †
-  * <kbd>e</kbd> `cabal bench` †
-  * <kbd>f</kbd> `cabal freeze`
-  * <kbd>g</kbd> `cabal fetch`
-  * <kbd>g</kbd> `cabal haddock` †
-  * <kbd>i</kbd> `cabal install` †
-  * <kbd>k</kbd> `cabal check`
-  * <kbd>l</kbd> `cabal list`
-  * <kbd>n</kbd> `cabal sandbox init`
-  * <kbd>o</kbd> `cabal info`
-  * <kbd>t</kbd> `cabal test` †
-  * <kbd>u</kbd> `cabal update` †
-  * <kbd>x</kbd> `cabal sandbox delete`
-  * <kbd>z</kbd> `cabal clean` †
+  * <kbd>b</kbd> `build` †
+  * <kbd>c</kbd> `configure`
+  * <kbd>d</kbd> `sdist` †
+  * <kbd>e</kbd> `bench` †
+  * <kbd>f</kbd> `freeze`
+  * <kbd>g</kbd> `fetch`
+  * <kbd>g</kbd> `haddock` †
+  * <kbd>i</kbd> `install` †
+  * <kbd>k</kbd> `check`
+  * <kbd>l</kbd> `list`
+  * <kbd>n</kbd> `sandbox init`
+  * <kbd>o</kbd> `info`
+  * <kbd>t</kbd> `test` †
+  * <kbd>u</kbd> `update` †
+  * <kbd>x</kbd> `sandbox delete`
+  * <kbd>z</kbd> `clean` †
+
+Note that `stack init` is called for you automatically is Stack mode when
+`stack.yaml` is missing.
 
 ## Installation
 
@@ -130,23 +133,7 @@ Similar to `ebal-cabal-executable`, but for Stack.
 ----
 
 ```
-ebal-global-option-alist ⇒
-  ((clean)
-   (sandbox-delete)
-   (update)
-   (test)
-   (info)
-   (sandbox-init)
-   (list "--installed" "--simple-output")
-   (check)
-   (install "--only-dependencies" "--enable-tests" "--enable-benchmarks")
-   (haddock)
-   (fetch)
-   (freeze "--enable-tests" "--enable-benchmarks")
-   (bench)
-   (sdist)
-   (configure "--enable-tests" "--enable-benchmarks")
-   (build))
+ebal-global-option-alist ⇒ nil
 ```
 
 Alist that maps names of commands to their default options.

@@ -29,23 +29,23 @@
 ;; and easy access to most Cabal commands († — commands available in Stack
 ;; mode):
 ;;
-;; * cabal init †
-;; * cabal build
-;; * cabal configure
-;; * cabal sdist †
-;; * cabal bench †
-;; * cabal freeze
-;; * cabal fetch
-;; * cabal haddock †
-;; * cabal install †
-;; * cabal check
-;; * cabal list
-;; * cabal sandbox init
-;; * cabal info
-;; * cabal test †
-;; * cabal update †
-;; * cabal sandbox delete
-;; * cabal clean †
+;; * init (in stack mode this is done for you automatically)
+;; * build †
+;; * configure
+;; * sdist †
+;; * bench †
+;; * freeze
+;; * fetch
+;; * haddock †
+;; * install †
+;; * check
+;; * list
+;; * sandbox init
+;; * info
+;; * test †
+;; * update †
+;; * sandbox delete
+;; * clean †
 
 ;;; Code:
 
@@ -401,6 +401,10 @@ failure.  Returned path is guaranteed to have trailing slash."
   (or (f-file? (f-expand "cabal.config"         dir))
       (f-file? (f-expand "cabal.sandbox.config" dir))))
 
+(defun ebal--stack-initialized-p (dir)
+  "Return non-NIL value if sandbox exists in DIR."
+  (f-file? (f-expand "stack.yaml" dir)))
+
 (defun ebal--implicit-sandbox-p ()
   "Return non-NIL value if sandbox should be implicitly created."
   (if (eql ebal-sandboxing 'ask)
@@ -520,6 +524,31 @@ the formatted command."
       (push cmd ebal--pre-commands))
     cmd))
 
+(defun ebal--ensure-sandbox-exists (dir)
+  "Ensure that Cabal sandbox exists in DIR.
+
+This means that if sandbox is missing in DIR, special command
+will be registered to create it before any other command will be
+executed.  This function respects settings regarding sandboxing.
+
+This only works whne `ebal-operation-mode' is cabal."
+  (when (and (not (eq ebal-operation-mode 'stack))
+             (not (ebal--sandbox-exists-p dir))
+             (ebal--implicit-sandbox-p))
+    (ebal--register-command 'before "sandbox init")))
+
+(defun ebal--ensure-stack-init (dir)
+  "Ensure that stack is initialized for project in DIR.
+
+This means that if \"stack.yaml\" is missing in DIR, special
+command will be registered to create it before any other command
+will be executed.
+
+This only works when `ebal-operation-mode' is stack."
+  (when (and (eq ebal-operation-mode 'stack)
+             (not (ebal--stack-initialized-p dir)))
+    (ebal--register-command 'before "init")))
+
 (defun ebal--call-target (dir command &rest args)
   "Call target as if from DIR performing COMMAND with arguments ARGS.
 
@@ -570,13 +599,13 @@ it cannot be used on its own by user."
           (when arg (list arg))))
   (run-hooks ebal-after-command-hook))
 
-(defmacro ebal--define-command (name kbd m global-options doc-string &rest body)
+(defmacro ebal--define-command (name kbd mode &rest body)
   "Define new Ebal command named NAME.
 
 KBD is keybinding (a character) that is used by
 `ebal-command-popup' function.
 
-M specifies modes in which the command will be available:
+MODE specifies modes in which the command will be available:
 
   cabal — only in Cabal mode
 
@@ -584,40 +613,27 @@ M specifies modes in which the command will be available:
 
   both — in both Cabal and Stack mode
 
-GLOBAL-OPTIONS should be list of strings that contains all the
-command line options that should be always used with this
-command.
-
-DOC-STRING is description of the command, BODY is an implicit
-PROGN.
+BODY is an implicit PROGN.
 
 Note that `ebal--actual-command' is let-bound to name of actual
-command inside of BODY.  Also, inside the BODY, `non-direct-call'
-is bound to truly value if this command is called directly by
-user.  Some commands can check ARG variable that's bound to
-argument when actual command is called as dependency."
-  (declare (indent 4))
-  (let ((function-name
-         (intern (concat "ebal--command-"
-                         (symbol-name name)))))
-    `(progn
-       (defun ,function-name (&optional arg)
-         ,doc-string
-         (ignore arg)
-         (let ((ebal--actual-command ',name))
-           ,@body))
-       (when (memq ',m '(cabal both))
-         (push (cons ',name (function ,function-name))
-               ebal--cabal-command-alist))
-       (when (memq ',m '(stack both))
-         (push (cons ',name (function ,function-name))
-               ebal--stack-command-alist))
-       (cl-pushnew (cons ,kbd ',name)
-                   ebal-popup-key-alist
-                   :key #'car)
-       (cl-pushnew (cons ',name ',global-options)
-                   ebal-global-option-alist
-                   :key #'car))))
+command inside of BODY.  Some commands can check ARG variable
+that's bound to argument when actual command is called as
+dependency."
+  (declare (indent 3))
+  `(let ((func
+          (lambda (&optional arg)
+            (ignore arg)
+            (let ((ebal--actual-command ',name))
+              ,@body))))
+     (when (memq (quote ,mode) '(cabal both))
+       (push (cons ',name func)
+             ebal--cabal-command-alist))
+     (when (memq (quote ,mode) '(stack both))
+       (push (cons ',name func)
+             ebal--stack-command-alist))
+     (cl-pushnew (cons ,kbd ',name)
+                 ebal-popup-key-alist
+                 :key #'car)))
 
 ;;;###autoload
 (defun ebal-execute (&optional command)
@@ -648,10 +664,11 @@ choose command with `ebal-select-command-function'."
         (message "Cannot locate ‘.cabal’ file."))
     (message "Cannot local Cabal executable on this system.")))
 
-;; Definitions of all supported commands.
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Definitions of all supported commands
 
-(ebal--define-command build ?b both nil
-  "Build Cabal target ARG."
+(ebal--define-command build ?b cabal
   (let ((target
          (or arg
              (funcall ebal-completing-read-function
@@ -664,31 +681,26 @@ choose command with `ebal-select-command-function'."
            (unless (string= target "default")
              (list target)))))
 
+(ebal--define-command build ?b stack
+  (ebal--ensure-stack-init ebal--last-directory)
+  (ebal--perform-command "build"))
+
 (ebal--define-command configure ?c cabal
-                      ("--enable-tests"
-                       "--enable-benchmarks")
-  "Configure how package is built."
   (ebal--perform-command "configure"))
 
-(ebal--define-command sdist ?d both nil
-  "Generate a source distribution file (.tag.gz)."
+(ebal--define-command sdist ?d both
+  (ebal--ensure-stack-init ebal--last-directory)
   (ebal--perform-command "sdist"))
 
-(ebal--define-command bench ?e both nil
-  "Run all/specific benchmarks."
+(ebal--define-command bench ?e both
   ;; TODO Improve this so specific benchmarks can be run.
+  (ebal--ensure-stack-init ebal--last-directory)
   (ebal--perform-command "bench"))
 
 (ebal--define-command freeze ?f cabal
-                      ("--enable-tests"
-                       "--enable-benchmarks")
-  "Calculate a valid set of dependencies and their exact
-versions.  If successful, save the result to the file
-\"cabal.config\"."
   (ebal--perform-command "freeze"))
 
-(ebal--define-command fetch ?g cabal nil
-  "Download packages for later installation."
+(ebal--define-command fetch ?g cabal
   (let ((packages
          (or arg
              (funcall ebal-completing-read-function
@@ -698,42 +710,27 @@ versions.  If successful, save the result to the file
                       t))))
     (ebal--perform-command "fetch" packages)))
 
-(ebal--define-command haddock ?h both nil
-  "Generate Haddock HTML documentation.
-
-Requires the program `haddock'."
+(ebal--define-command haddock ?h both
+  (ebal--ensure-stack-init ebal--last-directory)
   (ebal--perform-command "haddock"))
 
 (ebal--define-command install ?i both
-                      ("--only-dependencies"
-                       "--enable-tests"
-                       "--enable-benchmarks")
-  "Install necessary packages."
-  (when (and (not (ebal--sandbox-exists-p ebal--last-directory))
-             (ebal--implicit-sandbox-p))
-    (ebal--register-command 'before "sandbox init"))
+  (ebal--ensure-sandbox-exists ebal--last-directory)
+  (ebal--ensure-stack-init     ebal--last-directory)
   (ebal--perform-command "install"))
 
-(ebal--define-command check ?k cabal nil
-  "Check the package for common mistakes."
-  (ebal--perform-command "check" nil))
+(ebal--define-command check ?k cabal
+  (ebal--perform-command "check"))
 
 (ebal--define-command list ?l cabal
-                      ("--installed"
-                       "--simple-output")
-  "List packages matching a search string."
-  (ebal--perform-command "list" nil))
+  (ebal--perform-command "list"))
 
-(ebal--define-command sandbox-init ?n cabal nil
-  "Initialize a sandbox in the current directory.  An existing
-package database will not be modified, but settings (such as the
-location of the database) can be modified this way."
+(ebal--define-command sandbox-init ?n cabal
   (if (ebal--sandbox-exists-p ebal--last-directory)
       (message "Sandbox already exists")
     (ebal--perform-command "sandbox init")))
 
-(ebal--define-command info ?o cabal nil
-  "Display detailed information about a particular package."
+(ebal--define-command info ?o cabal
   (let ((package
          (or arg
              (funcall ebal-completing-read-function
@@ -743,34 +740,37 @@ location of the database) can be modified this way."
                       t))))
     (ebal--perform-command "info" package)))
 
-(ebal--define-command test ?t both nil
-  "Run all/specific tests in the test suite."
+(ebal--define-command test ?t both
   ;; TODO allow to run specific test components
+  (ebal--ensure-stack-init ebal--last-directory)
   (ebal--perform-command "test"))
 
-(ebal--define-command update ?u both nil
-  "Update list of known packages."
+(ebal--define-command update ?u both
+  (ebal--ensure-stack-init ebal--last-directory)
   (ebal--perform-command "update"))
 
-(ebal--define-command sandbox-delete ?x cabal nil
-  "Remove the sandbox deleting all the packages installed inside."
+(ebal--define-command sandbox-delete ?x cabal
   (if (ebal--sandbox-exists-p ebal--last-directory)
       (when (yes-or-no-p "Really delete the sandbox and all packages?")
         (ebal--perform-command "sandbox delete"))
     (message "There is no sandbox to delete")))
 
-(ebal--define-command clean ?z both nil
-  "Clean up after a build."
+(ebal--define-command clean ?z both
+  (ebal--ensure-stack-init ebal--last-directory)
   (ebal--perform-command "clean"))
 
-;; User interface.
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; User interface
 
 (defalias 'ebal-built-in-completing-read 'completing-read)
 (defalias 'ebal-ido-completing-read      'ido-completing-read+)
 (defalias 'ebal-command-completing-read  'completing-read)
 (defalias 'ebal-command-ido              'ido-completing-read+)
 
-;; Ebal command popup.
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Ebal command popup
 
 (defun ebal-command-popup
     (prompt collection &optional predicate
