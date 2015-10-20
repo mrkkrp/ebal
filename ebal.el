@@ -372,14 +372,13 @@ failure.  Returned path is guaranteed to have trailing slash."
     (when dir
       (f-slash dir))))
 
-(defmacro ebal--mode-alts (cabal stack)
-  "Execute CABAL or STACK expression according to mode of operation.
+(defun ebal--cabal-mode-p ()
+  "Return non-NIL value if current mode is Cabal mode."
+  (not (eq ebal-operation-mode 'stack)))
 
-`ebal-operation-mode' controls current mode."
-  (declare (indent defun))
-  `(if (eq ebal-operation-mode 'stack)
-       ,stack
-     ,cabal))
+(defun ebal--stack-mode-p ()
+  "Return non-NIL value if current mode is Stack mode."
+  (eq ebal-operation-mode 'stack))
 
 (defun ebal--mod-time (filename)
   "Return time of last modification of file FILENAME."
@@ -388,8 +387,8 @@ failure.  Returned path is guaranteed to have trailing slash."
 (defun ebal--target-executable ()
   "Return path to target program is it's available, and NIL otherwise."
   (cl-destructuring-bind (default . custom)
-      (ebal--mode-alts
-        (cons "cabal" ebal-cabal-executable)
+      (if (ebal--cabal-mode-p)
+          (cons "cabal" ebal-cabal-executable)
         (cons "stack" ebal-stack-executable))
     (cond ((executable-find default)
            default)
@@ -414,13 +413,27 @@ failure.  Returned path is guaranteed to have trailing slash."
 (defun ebal--installed-packages (dir)
   "Call Cabal as if from directory DIR and return list of installed packages.
 
-This uses variation \"cabal list\" internally."
+This uses variation of \"cabal list\" internally."
   (let ((default-directory dir))
     (with-temp-buffer
-      (shell-command "cabal list --installed --simple-output"
-                     (current-buffer))
-      (ebal--all-matches "^\\(.+\\)[[:blank:]]"))))
+      (shell-command
+       (format "%s list --installed --simple-output"
+               (ebal--target-executable))
+       (current-buffer))
+      (ebal--all-matches "^\\(.+\\)[[:blank:]]*$"))))
 
+(defun ebal--stack-templates ()
+  "Return list of available Stack templates.
+
+If `ebal--operation-mode' is not stack, return NIL."
+  (when (eq ebal-operation-mode 'stack)
+    (with-temp-buffer
+      (shell-command
+       (format "%s templates"
+               (ebal--target-executable))
+       (current-buffer))
+      (buffer-string)
+      (ebal--all-matches "^\\(.+\\)[[:blank:]]*$"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Preparation
@@ -524,30 +537,43 @@ the formatted command."
       (push cmd ebal--pre-commands))
     cmd))
 
-(defun ebal--ensure-sandbox-exists (dir)
+(defun ebal--ensure-sandbox-exists (dir &optional when)
   "Ensure that Cabal sandbox exists in DIR.
 
 This means that if sandbox is missing in DIR, special command
-will be registered to create it before any other command will be
-executed.  This function respects settings regarding sandboxing.
+will be registered to create it.  This function respects settings
+regarding sandboxing.
 
-This only works whne `ebal-operation-mode' is cabal."
-  (when (and (not (eq ebal-operation-mode 'stack))
+Argument WHEN controls when to run the registered command, before
+or after the next command.  Recognized values are:
+
+  before (default) — execute the command before next command;
+
+  after — execute the command after next command.
+
+This only works when the package is in Cabal mode."
+  (when (and (ebal--cabal-mode-p)
              (not (ebal--sandbox-exists-p dir))
              (ebal--implicit-sandbox-p))
-    (ebal--register-command 'before "sandbox init")))
+    (ebal--register-command (or when 'before) "sandbox init")))
 
-(defun ebal--ensure-stack-init (dir)
+(defun ebal--ensure-stack-init (dir &optional when)
   "Ensure that stack is initialized for project in DIR.
 
 This means that if \"stack.yaml\" is missing in DIR, special
-command will be registered to create it before any other command
-will be executed.
+command will be registered to create it.
 
-This only works when `ebal-operation-mode' is stack."
-  (when (and (eq ebal-operation-mode 'stack)
+Argument WHEN controls when to run the registered command, before
+or after the next command.  Recognized values are:
+
+  before (default) — execute the command before next command;
+
+  after — execute the command after next command.
+
+This only works when the package is in Stack mode."
+  (when (and (ebal--stack-mode-p)
              (not (ebal--stack-initialized-p dir)))
-    (ebal--register-command 'before "init")))
+    (ebal--register-command (or when 'before) "init")))
 
 (defun ebal--call-target (dir command &rest args)
   "Call target as if from DIR performing COMMAND with arguments ARGS.
@@ -563,7 +589,7 @@ This uses `compile' internally."
                      "[[:space:]]"
                      "-"
                      ebal--project-name))
-                   (ebal--mode-alts "cabal" "stack")))))
+                   (if (ebal--cabal-mode-p) "cabal" "stack")))))
     (compile
      (mapconcat
       #'identity
@@ -645,8 +671,8 @@ choose command with `ebal-select-command-function'."
   (if (ebal--target-executable)
       (if (ebal--prepare)
           (let* ((command-alist
-                  (ebal--mode-alts
-                    ebal--cabal-command-alist
+                  (if (ebal--cabal-mode-p)
+                      ebal--cabal-command-alist
                     ebal--stack-command-alist))
                  (command
                   (or command
@@ -798,8 +824,8 @@ taken for compatibility and have no effect."
          (i 0))
     (when collection
       (let ((buffer (get-buffer-create
-                     (ebal--mode-alts
-                       "*Cabal Commands*"
+                     (if (ebal--cabal-mode-p)
+                         "*Cabal Commands*"
                        "*Stack Commands*"))))
         (with-current-buffer buffer
           (with-current-buffer-window
@@ -944,28 +970,29 @@ inputs, `ebal--init-aborted' should be set to NIL."
            (include-comments
             (y-or-n-p "Include documentation on what each field means? ")))
       (unless ebal--init-aborted
-        (when (ebal--implicit-sandbox-p)
-          (ebal--register-command 'after "sandbox init"))
-        (ebal--call-target
-         default-directory
-         "init"
-         "--non-interactive"
-         (ebal--form-arg "--package-name" ebal--project-name)
-         (ebal--form-arg "--version"      ebal--project-version)
-         (ebal--form-arg "--license"      license)
-         (ebal--form-arg "--author"       author)
-         (ebal--form-arg "--email"        email)
-         (ebal--form-arg "--homepage"     homepage)
-         (ebal--form-arg "--synopsis"     synopsis)
-         (ebal--form-arg "--category"     category)
-         (cl-case type
-           ("Library"    "--is-library")
-           ("Executable" "--is-executable"))
-         (ebal--form-arg "--main-is"      main-is)
-         (ebal--form-arg "--language"     language)
-         (ebal--form-arg "--source-dir"   source-dir)
-         (unless include-comments
-           "--no-comments"))))
+        (ebal--ensure-sandbox-exists default-directory 'after)
+        (ebal--ensure-stack-init     default-directory 'after)
+        (let ((ebal-operation-mode 'cabal))
+          (ebal--call-target
+           default-directory
+           "init"
+           "--non-interactive"
+           (ebal--form-arg "--package-name" ebal--project-name)
+           (ebal--form-arg "--version"      ebal--project-version)
+           (ebal--form-arg "--license"      license)
+           (ebal--form-arg "--author"       author)
+           (ebal--form-arg "--email"        email)
+           (ebal--form-arg "--homepage"     homepage)
+           (ebal--form-arg "--synopsis"     synopsis)
+           (ebal--form-arg "--category"     category)
+           (cl-case type
+             ("Library"    "--is-library")
+             ("Executable" "--is-executable"))
+           (ebal--form-arg "--main-is"      main-is)
+           (ebal--form-arg "--language"     language)
+           (ebal--form-arg "--source-dir"   source-dir)
+           (unless include-comments
+             "--no-comments")))))
     (run-hooks ebal-after-init-hook)))
 
 (provide 'ebal)
