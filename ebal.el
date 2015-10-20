@@ -145,6 +145,9 @@ This is usually set by `ebal--parse-cabal-file'.")
 (defvar ebal--init-aborted nil
   "Whether current initialization has been aborted or not.")
 
+(defvar ebal--init-template-selected nil
+  "Whether template was selected during initialization.")
+
 (defcustom ebal-operation-mode 'cabal
   "Mode of operation for Ebal package.
 
@@ -893,7 +896,8 @@ Finally, if COLLECTION is nil, plain `read-string' is used.
 If `ebal--init-aborted' is non-NIL, don't even try to read users'
 input, immediately return NIL.  Thus, before reading of series of
 inputs, `ebal--init-aborted' should be set to NIL."
-  (unless ebal--init-aborted
+  (unless (or ebal--init-aborted
+              ebal--init-template-selected)
     (let* ((collection
             (if (listp collection)
                 collection
@@ -920,14 +924,32 @@ inputs, `ebal--init-aborted' should be set to NIL."
 
 ;;;###autoload
 (defun ebal-init ()
-  "Create a .cabal, Setup.hs, and optionally a LICENSE file interactively."
+  "Create a .cabal, Setup.hs, and optionally a LICENSE file interactively.
+
+It's also possible to use a Stack template.  Note that in any
+case you should first create directory for your project and only
+then call this command."
   (interactive)
   (if (ebal--prepare)
       (message "The directory is already Cabalized, it seems")
     (run-hooks ebal-before-init-hook)
-    (setq ebal--init-aborted nil)
+    (setq ebal--init-aborted           nil
+          ebal--init-template-selected nil)
     (let* ((ebal--project-name
-            (ebal--init-query "Package name: " "cabal"))
+            (ebal--init-query
+             "Package name: "
+             (file-name-nondirectory
+              (directory-file-name
+               default-directory))))
+           (template
+            (when (ebal--stack-mode-p)
+              (let ((result
+                     (ebal--init-query
+                      "Use template: "
+                      (cons "none" (ebal--stack-templates)))))
+                (when result
+                  (setq ebal--init-template-selected t)
+                  result))))
            (ebal--project-version
             (ebal--init-query "Initial version: " "0.1.0"))
            (license
@@ -954,7 +976,7 @@ inputs, `ebal--init-aborted' should be set to NIL."
              '("Library" "Executable")
              t))
            (main-is
-            (when (string= type "Executable")
+            (when (string-equal type "Executable")
               (ebal--init-query
                "What is the main module of the executable: "
                '("Main.hs" "Main.lhs"))))
@@ -966,33 +988,41 @@ inputs, `ebal--init-aborted' should be set to NIL."
            (source-dir
             (ebal--init-query
              "Source directory: "
-             '("src" "none")))
-           (include-comments
-            (y-or-n-p "Include documentation on what each field means? ")))
+             '("src" "none"))))
       (unless ebal--init-aborted
         (ebal--ensure-sandbox-exists default-directory 'after)
-        (ebal--ensure-stack-init     default-directory 'after)
-        (let ((ebal-operation-mode 'cabal))
-          (ebal--call-target
-           default-directory
-           "init"
-           "--non-interactive"
-           (ebal--form-arg "--package-name" ebal--project-name)
-           (ebal--form-arg "--version"      ebal--project-version)
-           (ebal--form-arg "--license"      license)
-           (ebal--form-arg "--author"       author)
-           (ebal--form-arg "--email"        email)
-           (ebal--form-arg "--homepage"     homepage)
-           (ebal--form-arg "--synopsis"     synopsis)
-           (ebal--form-arg "--category"     category)
-           (cl-case type
-             ("Library"    "--is-library")
-             ("Executable" "--is-executable"))
-           (ebal--form-arg "--main-is"      main-is)
-           (ebal--form-arg "--language"     language)
-           (ebal--form-arg "--source-dir"   source-dir)
-           (unless include-comments
-             "--no-comments")))))
+        (if ebal--init-template-selected
+            ;; Stack template
+            (ebal--call-target
+             default-directory
+             "new"
+             "--bare"
+             ebal--project-name
+             template)
+          ;; Cabal init
+          (ebal--ensure-stack-init default-directory 'after)
+          (let ((ebal-operation-mode 'cabal))
+            (ebal--call-target
+             default-directory
+             "init"
+             "--non-interactive"
+             (ebal--form-arg "--package-name" ebal--project-name)
+             (ebal--form-arg "--version"      ebal--project-version)
+             (ebal--form-arg "--license"      license)
+             (ebal--form-arg "--author"       author)
+             (ebal--form-arg "--email"        email)
+             (ebal--form-arg "--homepage"     homepage)
+             (ebal--form-arg "--synopsis"     synopsis)
+             (ebal--form-arg "--category"     category)
+             (cl-case type
+               ("Library"    "--is-library")
+               ("Executable" "--is-executable"))
+             (ebal--form-arg "--main-is"      main-is)
+             (ebal--form-arg "--language"     language)
+             (ebal--form-arg "--source-dir"   source-dir)
+             (unless (y-or-n-p
+                      "Include documentation on what each field means? ")
+               "--no-comments"))))))
     (run-hooks ebal-after-init-hook)))
 
 (provide 'ebal)
