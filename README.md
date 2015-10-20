@@ -26,7 +26,7 @@ easy access to most commands († — commands available in Stack mode):
   * <kbd>x</kbd> `sandbox delete`
   * <kbd>z</kbd> `clean` †
 
-Note that `stack init` is called for you automatically is Stack mode when
+Note that `stack init` is called for you automatically in Stack mode when
 `stack.yaml` is missing.
 
 ## Installation
