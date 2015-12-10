@@ -253,6 +253,25 @@ Hook to run after execution of particular command.
 
 Name of the command is available in `ebal--actual-command`.
 
+## Defining your own commands
+
+This is somewhat advanced topic, but it's possible to define your own
+commands. Use `ebal--define-command` to define new commands, see its
+associated documentation in Emacs. Here is an example of calling `yesod
+devel` with `stack`:
+
+
+```emacs-lisp-
+(require 'ebal)
+
+(ebal--define-command yesod-devel ?y stack
+  (ebal--ensure-stack-init ebal--last-directory)
+  (ebal--perform-command "exec" "--" "yesod" "devel"))
+```
+
+This is admittedly basic example, but it should be of some use. See how
+other commands are defined in source code for inspiration.
+
 ## License
 
 Copyright © 2015 Mark Karpov
