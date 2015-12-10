@@ -605,14 +605,14 @@ This uses `compile' internally."
           ebal--post-commands nil)
     nil))
 
-(defun ebal--perform-command (command &optional arg)
+(defun ebal--perform-command (command &rest args)
   "Perform target command COMMAND.
 
 This function should be called in “prepared” environment, where
 `ebal--actual-command' is bound to name of executing command.
 
-If argument ARG is given, it will quoted and added to command
-line.
+If argument ARGS is given, its elements will be quoted and added
+to command line.
 
 This is low-level operation, it doesn't run `ebal--prepare', thus
 it cannot be used on its own by user."
@@ -620,12 +620,11 @@ it cannot be used on its own by user."
   (apply #'ebal--call-target
          ebal--last-directory
          command
-         (append
-          (cdr (assq ebal--actual-command
-                     ebal-global-option-alist))
-          (cdr (assq ebal--actual-command
-                     ebal-project-option-alist))
-          (when arg (list arg))))
+         (cdr (assq ebal--actual-command
+                    ebal-global-option-alist))
+         (cdr (assq ebal--actual-command
+                    ebal-project-option-alist))
+         args)
   (run-hooks ebal-after-command-hook))
 
 (defmacro ebal--define-command (name kbd mode &rest body)
