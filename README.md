@@ -261,7 +261,7 @@ associated documentation in Emacs. Here is an example of calling `yesod
 devel` with `stack`:
 
 
-```emacs-lisp-
+```emacs-lisp
 (require 'ebal)
 
 (ebal--define-command yesod-devel ?y stack
