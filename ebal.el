@@ -620,11 +620,12 @@ it cannot be used on its own by user."
   (apply #'ebal--call-target
          ebal--last-directory
          command
-         (cdr (assq ebal--actual-command
-                    ebal-global-option-alist))
-         (cdr (assq ebal--actual-command
-                    ebal-project-option-alist))
-         args)
+         (append
+          (cdr (assq ebal--actual-command
+                     ebal-global-option-alist))
+          (cdr (assq ebal--actual-command
+                     ebal-project-option-alist))
+          args))
   (run-hooks ebal-after-command-hook))
 
 (defmacro ebal--define-command (name kbd mode &rest body)
