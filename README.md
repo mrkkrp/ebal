@@ -260,7 +260,6 @@ commands. Use `ebal--define-command` to define new commands, see its
 associated documentation in Emacs. Here is an example of calling `yesod
 devel` with `stack`:
 
-
 ```emacs-lisp
 (require 'ebal)
 
@@ -274,6 +273,6 @@ other commands are defined in source code for inspiration.
 
 ## License
 
-Copyright © 2015 Mark Karpov
+Copyright © 2015–2016 Mark Karpov
 
 Distributed under GNU GPL, version 3.
