@@ -1,7 +1,7 @@
 # Ebal
 
 [![License GPL 3](https://img.shields.io/badge/license-GPL_3-green.svg)](http://www.gnu.org/licenses/gpl-3.0.txt)
-[![MELPA](http://melpa.org/packages/ebal-badge.svg)](http://melpa.org/#/ebal)
+[![MELPA](https://melpa.org/packages/ebal-badge.svg)](https://melpa.org/#/ebal)
 [![Build Status](https://travis-ci.org/mrkkrp/ebal.svg?branch=master)](https://travis-ci.org/mrkkrp/ebal)
 
 This is Emacs interface to Cabal and Stack. Currently, it provides fast and
