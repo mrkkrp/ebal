@@ -435,8 +435,8 @@ If `ebal--operation-mode' is not stack, return NIL."
        (format "%s templates"
                (ebal--target-executable))
        (current-buffer))
-      (buffer-string)
-      (ebal--all-matches "^\\(.+\\)[[:blank:]]*$"))))
+      (remove "Template"
+              (ebal--all-matches "^\\(\\([[:alnum:]]\\|-\\)+\\)")))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Preparation
