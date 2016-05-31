@@ -25,7 +25,7 @@
 
 ;;; Commentary:
 
-;; This is Emacs interface to Cabal and Stack. Currently, it provides fast
+;; This is Emacs interface to Cabal and Stack.  Currently, it provides fast
 ;; and easy access to most Cabal commands († — commands available in Stack
 ;; mode):
 ;;
