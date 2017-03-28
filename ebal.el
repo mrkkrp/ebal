@@ -355,7 +355,7 @@ This is used by `ebal--prepare'."
 
 The following variable is set:
 
-  `ebal--project-option-alist'
+  `ebal-project-option-alist'
 
 This is used by `ebal--prepare.'"
   (setq ebal-project-option-alist
@@ -452,7 +452,7 @@ Cabal files is found, the following variables are set:
   `ebal--project-version'
   `ebal--project-targets'
 
-If \"*.ebal\" file is present, `ebal--project-option-alist' is
+If \"*.ebal\" file is present, `ebal-project-option-alist' is
 set.
 
 At the end, `ebal--last-directory' is set.  Note that this
