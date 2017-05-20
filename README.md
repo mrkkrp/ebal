@@ -4,11 +4,11 @@
 [![MELPA](https://melpa.org/packages/ebal-badge.svg)](https://melpa.org/#/ebal)
 [![Build Status](https://travis-ci.org/mrkkrp/ebal.svg?branch=master)](https://travis-ci.org/mrkkrp/ebal)
 
-This is Emacs interface to Cabal and Stack. Currently, it provides fast and
-easy access to most commands († — commands available in Stack mode):
+This is an Emacs interface to Cabal and Stack. Currently, it provides fast
+and easy access to most commands (†—commands available in Stack mode):
 
 * <kbd>M-x ebal-init</kbd> `cabal init` (useful even in Stack mode)
-* <kbd>M-x ebal-execute</kbd> — opens a popup menu with the following:
+* <kbd>M-x ebal-execute</kbd>—opens a popup menu with the following:
   * <kbd>b</kbd> `build` †
   * <kbd>c</kbd> `configure`
   * <kbd>d</kbd> `sdist` †
@@ -39,8 +39,8 @@ this:
 (require 'ebal)
 ```
 
-It's available via MELPA, so you can just <kbd>M-x package-install RET
-ebal RET</kbd>.
+It's available via MELPA, so you can just <kbd>M-x package-install RET ebal
+RET</kbd>.
 
 ## Usage
 
@@ -54,8 +54,8 @@ The package provides two commands:
 
 * `ebal-init` that acts as a wizard helping create new Cabal project;
 
-* `ebal-execute` — this allows to perform any command while visiting any
-  file or directory in a project.
+* `ebal-execute`—this allows to perform any command while visiting any file
+  or directory in a project.
 
 You can create key bindings for these commands to simplify interaction. I
 advise creating of simple key binding at least for `ebal-execute`, since you
@@ -77,19 +77,19 @@ only need to press a key:
 ![Ebal Execute](https://raw.githubusercontent.com/mrkkrp/ebal/gh-pages/ebal-execute.png)
 
 Some commands, like `build` can gather additional info to help you to enter
-arguments. `build` shows (if you're using IDO) list of all build targets
-extracted from your `.cabal` file, while `cabal info` will display complete
-list of installed packages to choose from, etc.
+arguments. `build` shows a list of all build targets extracted from your
+`.cabal` file, while `cabal info` will display complete list of installed
+packages to choose from, etc.
 
 The usage should be pretty straightforward, so let me tell you how to
 customize the package.
 
 ## Customization
 
-To customize Ebal, you can set variables as well as use Emacs own
-customization interface, which may seem more friendly for some people.
+To customize Ebal, you can either set variables or use the customization
+interface, which may seem more friendly for some people.
 
-To use customization interface type <kbd>M-x customize-group RET ebal
+To use the customization interface type <kbd>M-x customize-group RET ebal
 RET</kbd>.
 
 ----
@@ -101,9 +101,8 @@ Mode of operation for Ebal package.
 
 The following values are recognized:
 
-* `cabal` — Ebal works as interface for Cabal
-
-* `stack` — Ebal works as interface for Stack
+* `cabal`—Ebal works as an interface for Cabal
+* `stack`—Ebal works as an interface for Stack
 
 All other values of this variable produce the same effect as `cabal`.
 
@@ -116,8 +115,8 @@ ebal-cabal-executable ⇒ nil
 Path to Cabal executable.
 
 If it's not `nil`, this value is used in invocation of Cabal commands
-instead of standard `"cabal"` string. Set this variable if your Cabal is in
-a strange place where OS cannot find it.
+instead of the standard `"cabal"` string. Set this variable if your Cabal is
+in a strange place where OS cannot find it.
 
 Note that the path is quoted with `shell-quote-argument` before being used
 to compose command line.
@@ -140,7 +139,7 @@ Alist that maps names of commands to their default options.
 
 Names of commands are symbols and options are lists of strings.
 
-Note that this is global collection of options. If you want to specify
+Note that this is a global collection of options. If you want to specify an
 option to be used only with a specific command and in a specific project,
 see `ebal-project-option-alist` and corresponding setup instructions.
 
@@ -171,14 +170,14 @@ This determines Ebal's policy towards sandboxing.
 
 The following values are recognized (Cabal mode only):
 
-* `nil` — don't create sandboxes unless user explicitly runs command to
-  create one.
+* `nil`—don't create sandboxes unless user explicitly runs command to create
+  one.
 
-* `ask` — ask if user wants to create a sandbox (so it's harder to forget to
+* `ask`—ask if user wants to create a sandbox (so it's harder to forget to
   create it), this is often preferable because most Haskell developers want
   sandboxes everywhere nowadays (default).
 
-* `always` — create sandboxes silently when they are missing and they should
+* `always`—create sandboxes silently when they are missing and they should
   be created. With this option every your project is sandboxed without any
   effort on your side.
 
@@ -200,7 +199,7 @@ ebal-select-command-function ⇒ ebal-command-popup
 
 Function to call to select Ebal command.
 
-This is what `ebal-execute` uses.  Default is Ebal custom popup buffer, but
+This is what `ebal-execute` uses. Default is Ebal custom popup buffer, but
 you can use IDO-powered variant if you like or plain
 `ebal-command-completing-read`.
 

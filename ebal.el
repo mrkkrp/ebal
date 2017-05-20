@@ -25,9 +25,9 @@
 
 ;;; Commentary:
 
-;; This is Emacs interface to Cabal and Stack.  Currently, it provides fast
-;; and easy access to most Cabal commands († — commands available in Stack
-;; mode):
+;; This is an Emacs interface to Cabal and Stack.  Currently, it provides
+;; fast and easy access to most Cabal commands (†—commands available in
+;; Stack mode):
 ;;
 ;; * init (in stack mode this is done for you automatically)
 ;; * build †
@@ -153,9 +153,8 @@ This is usually set by `ebal--parse-cabal-file'.")
 
 The following values are recognized:
 
-  cabal — Ebal works as interface for Cabal
-
-  stack — Ebal works as interface for Stack
+  cabal—Ebal works as interface for Cabal
+  stack—Ebal works as interface for Stack
 
 All other values of this variable produce the same effect as
 `cabal'."
@@ -167,8 +166,9 @@ All other values of this variable produce the same effect as
   "Path to Cabal executable.
 
 If it's not NIL, this value is used in invocation of Cabal
-commands instead of standard \"cabal\" string.  Set this variable
-if your Cabal is in a strange place where OS cannot find it.
+commands instead of the standard \"cabal\" string.  Set this
+variable if your Cabal is in a strange place where OS cannot find
+it.
 
 Note that the path is quoted with `shell-quote-argument' before
 being used to compose command line."
@@ -180,8 +180,9 @@ being used to compose command line."
   "Path to Stack executable.
 
 If it's not NIL, this value is used in invocation of Stack
-commands instead of standard \"stack\" string.  Set this variable
-if your Stack is in a strange place where OS cannot find it.
+commands instead of the standard \"stack\" string.  Set this
+variable if your Stack is in a strange place where OS cannot find
+it.
 
 Note that the path is quoted with `shell-quote-argument' before
 being used to compose command line."
@@ -195,9 +196,9 @@ being used to compose command line."
 
 Names of commands are symbols and options are lists of strings.
 
-Note that this is global collection of options.  If you want to
-specify option to be used only with a specific command and in a
-specific project, see `ebal-project-option-alist' and
+Note that this is a global collection of options.  If you want to
+specify an option to be used only with a specific command and in
+a specific project, see `ebal-project-option-alist' and
 corresponding setup instructions."
   :tag "Global Options for Ebal Commands"
   :type '(alist :key-type symbol
@@ -227,16 +228,16 @@ into it unquoted."
 
 The following values are recognized (Cabal mode only):
 
-  NIL — don't create sandboxes unless user explicitly runs
-  command to create one.
+  NIL—don't create sandboxes unless user explicitly runs command
+  to create one.
 
-  ask — ask if user wants to create a sandbox (so it's harder to
+  ask—ask if user wants to create a sandbox (so it's harder to
   forget to create it), this is often preferable because most
   Haskell developers want sandboxes everywhere
   nowadays (default).
 
-  always — create sandboxes silently when they are missing and
-  they should be created.  With this option every your project is
+  always—create sandboxes silently when they are missing and they
+  should be created.  With this option every your project is
   sandboxed without any effort on your side.
 
 All other values of this variable produce the same effect as
@@ -526,9 +527,8 @@ expected to be used as argument of `compile'."
 
 KIND tells when to perform the command, meaningful values are:
 
-  before — execute the command before next command;
-
-  after — execute the command after next command.
+  before—execute the command before next command;
+  after—execute the command after next command.
 
 All other values of KIND have effect of ‘before’.
 
@@ -550,9 +550,8 @@ regarding sandboxing.
 Argument WHEN controls when to run the registered command, before
 or after the next command.  Recognized values are:
 
-  before (default) — execute the command before next command;
-
-  after — execute the command after next command.
+  before (default)—execute the command before next command;
+  after—execute the command after next command.
 
 This only works when the package is in Cabal mode."
   (when (and (ebal--cabal-mode-p)
@@ -569,9 +568,8 @@ command will be registered to create it.
 Argument WHEN controls when to run the registered command, before
 or after the next command.  Recognized values are:
 
-  before (default) — execute the command before next command;
-
-  after — execute the command after next command.
+  before (default)—execute the command before next command;
+  after—execute the command after next command.
 
 This only works when the package is in Stack mode."
   (when (and (ebal--stack-mode-p)
@@ -636,11 +634,9 @@ KBD is keybinding (a character) that is used by
 
 MODE specifies modes in which the command will be available:
 
-  cabal — only in Cabal mode
-
-  stack — only in Stack mode
-
-  both — in both Cabal and Stack mode
+  cabal—only in Cabal mode
+  stack—only in Stack mode
+  both—in both Cabal and Stack mode
 
 BODY is an implicit PROGN.
 
