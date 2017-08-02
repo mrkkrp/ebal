@@ -5,7 +5,7 @@
 ;; Author: Mark Karpov <markkarpov92@gmail.com>
 ;; URL: https://github.com/mrkkrp/ebal
 ;; Version: 0.2.1
-;; Package-Requires: ((emacs "24.4") (f "0.18.0") (ido-completing-read+ "3.6"))
+;; Package-Requires: ((emacs "24.4") (f "0.18.0"))
 ;; Keywords: convenience, cabal, haskell
 ;;
 ;; This file is not part of GNU Emacs.
@@ -250,21 +250,19 @@ All other values of this variable produce the same effect as
 (defcustom ebal-completing-read-function #'ebal-built-in-completing-read
   "Function to be called when requesting input from the user."
   :tag "Completing Function"
-  :type '(radio (function-item ebal-built-in-completing-read)
-                (function-item ebal-ido-completing-read)))
+  :type '(radio (function-item ebal-built-in-completing-read)))
 
 (defcustom ebal-select-command-function #'ebal-command-popup
   "Function to call to select Ebal command.
 
 This is what `ebal-execute' uses.  Default is Ebal custom popup
-buffer, but you can use IDO-powered variant if you like or plain
-`ebal-command-completing-read'.
+buffer, but you can use plain `ebal-command-completing-read' if
+you like.
 
 The function is called with arguments like those that
 `completing-read' takes."
   :tag "How to Select Command"
   :type '(radio (function-item ebal-command-completing-read)
-                (function-item ebal-command-ido)
                 (function-item ebal-command-popup)))
 
 ;;;###autoload
@@ -699,8 +697,7 @@ choose command with `ebal-select-command-function'."
              (funcall ebal-completing-read-function
                       "Build target: "
                       (cons "default" ebal--project-targets)
-                      nil
-                      t))))
+                      nil t nil nil "default"))))
     (apply #'ebal--perform-command
            "build"
            (unless (string= target "default")
@@ -726,14 +723,15 @@ choose command with `ebal-select-command-function'."
   (ebal--perform-command "freeze"))
 
 (ebal--define-command fetch ?g cabal
-  (let ((packages
-         (or arg
-             (funcall ebal-completing-read-function
-                      "Packages to fetch: "
-                      (ebal--installed-packages ebal--last-directory)
-                      nil
-                      t))))
-    (ebal--perform-command "fetch" packages)))
+  (let* ((installed-packages
+          (ebal--installed-packages ebal--last-directory))
+         (package
+          (or arg
+              (funcall ebal-completing-read-function
+                       "Package to fetch: "
+                       installed-packages
+                       nil t nil nil (car installed-packages)))))
+    (ebal--perform-command "fetch" package)))
 
 (ebal--define-command haddock ?h both
   (ebal--ensure-stack-init ebal--last-directory)
@@ -756,13 +754,13 @@ choose command with `ebal-select-command-function'."
     (ebal--perform-command "sandbox init")))
 
 (ebal--define-command info ?o cabal
-  (let ((package
-         (or arg
-             (funcall ebal-completing-read-function
-                      "Show info about package: "
-                      (ebal--installed-packages ebal--last-directory)
-                      nil
-                      t))))
+  (let* ((installed-packages
+          (ebal--installed-packages ebal--last-directory))
+         (package
+          (or arg
+              (funcall ebal-completing-read-function
+                       "Show info about package: "
+                       nil t nil nil (car installed-packages)))))
     (ebal--perform-command "info" package)))
 
 (ebal--define-command test ?t both
@@ -789,9 +787,7 @@ choose command with `ebal-select-command-function'."
 ;; User interface
 
 (defalias 'ebal-built-in-completing-read 'completing-read)
-(defalias 'ebal-ido-completing-read      'ido-completing-read+)
 (defalias 'ebal-command-completing-read  'completing-read)
-(defalias 'ebal-command-ido              'ido-completing-read+)
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -904,7 +900,10 @@ inputs, `ebal--init-aborted' should be set to NIL."
                          prompt
                          collection
                          nil
-                         require-match)
+                         require-match
+                         nil
+                         nil
+                         (car collection))
               (read-string prompt))))
       (if result
           (unless (and (string= result "none")
