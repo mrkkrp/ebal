@@ -1018,7 +1018,7 @@ then call this command."
              (unless (y-or-n-p
                       "Include documentation on what each field means? ")
                "--no-comments"))))))
-    (run-hooks ebal-after-init-hook))
+    (run-hooks ebal-after-init-hook)))
 
 (provide 'ebal)
 
