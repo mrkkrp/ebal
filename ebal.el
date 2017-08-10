@@ -335,19 +335,21 @@ This is used by `ebal--prepare'."
      ebal--project-targets
      (append
       ;; library
-      (mapcar (lambda (_) (format "lib:%s" ebal--project-name))
+      (mapcar (lambda (_) (format "%s:lib" ebal--project-name))
               (ebal--all-matches
                "^[[:blank:]]*library[[:blank:]]*"))
-      ;; executable
-      (mapcar (lambda (x) (format "exe:%s" x))
+      ;; executables
+      (mapcar (lambda (x) (format "%s:exe:%s" ebal--project-name x))
               (ebal--all-matches
                "^[[:blank:]]*executable[[:blank:]]+\\([[:word:]-]+\\)"))
       ;; test suites
-      (ebal--all-matches
-       "^[[:blank:]]*test-suite[[:blank:]]+\\([[:word:]-]+\\)")
+      (mapcar (lambda (x) (format "%s:test:%s" ebal--project-name x))
+              (ebal--all-matches
+               "^[[:blank:]]*test-suite[[:blank:]]+\\([[:word:]-]+\\)"))
       ;; benchmarks
-      (ebal--all-matches
-       "^[[:blank:]]*benchmark[[:blank:]]+\\([[:word:]-]+\\)")))))
+      (mapcar (lambda (x) (format "%s:bench:%s" ebal--project-name x))
+              (ebal--all-matches
+               "^[[:blank:]]*benchmark[[:blank:]]+\\([[:word:]-]+\\)"))))))
 
 (defun ebal--parse-ebal-file (filename)
   "Parse \"*.ebal\" file with name FILENAME and set some variables.
