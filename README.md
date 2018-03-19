@@ -4,9 +4,11 @@
 [![MELPA](https://melpa.org/packages/ebal-badge.svg)](https://melpa.org/#/ebal)
 [![Build Status](https://travis-ci.org/mrkkrp/ebal.svg?branch=master)](https://travis-ci.org/mrkkrp/ebal)
 
-*If you're using stack, please prefer
-[hasky-stack](https://github.com/hasky-mode/hasky-stack) from now on. Ebal
-is in maintenance mode.*
+*If you're using Stack, please prefer
+[hasky-stack](https://github.com/hasky-mode/hasky-stack) from now on. If
+you're using Cabal, please prefer
+[hasky-cabal](https://github.com/hasky-mode/hasky-cabal). Ebal has been
+deprecated in favor of these packages.*
 
 This is an Emacs interface to Cabal and Stack. Currently, it provides fast
 and easy access to most commands (†—commands available in Stack mode):
